@@ -8,6 +8,10 @@
 #   docker build -f docker/base.Dockerfile -t discobot-base:latest .
 FROM python:3.12-slim
 
+# Unbuffered stdout/stderr so `docker logs` shows bot output in real time
+# (esp. the watcher daemon, which would otherwise block-buffer its prints).
+ENV PYTHONUNBUFFERED=1
+
 # Shared runtime deps (httpx for Discord/HTTP, influxdb-client for digest).
 RUN pip install --no-cache-dir httpx influxdb-client
 
