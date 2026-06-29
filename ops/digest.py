@@ -227,19 +227,49 @@ def _format_jobs(jobs: list[dict]) -> str:
 def _format_deployments(data: dict | None) -> str:
     if data is None:
         return "\U0001F6A8 dev-status server unreachable"
-    # Expect either a list or a dict of service->status
-    services = data if isinstance(data, dict) else {}
-    if isinstance(data, list):
+    # The dev-status server returns {"total","up","down","deployments":[{"name",
+    # "up":0|1,...}]}. Older/alternate shapes also supported: a bare list of
+    # {name,status}, or a dict of service->status (str or {"status":...}).
+    summary = ""
+    if isinstance(data, dict) and isinstance(data.get("deployments"), list):
+        services = {
+            s.get("name", s.get("service", "?")): ("UP" if s.get("up") else "DOWN")
+            for s in data["deployments"]
+        }
+        if "total" in data:
+            summary = f"**{data.get('up', '?')}/{data.get('total', '?')} up**\n"
+    elif isinstance(data, list):
         services = {s.get("name", s.get("service", "?")): s.get("status", "?") for s in data}
+    elif isinstance(data, dict):
+        services = data
+    else:
+        services = {}
     if not services:
         return "No services reported."
+
+    def _status_of(info: object) -> str:
+        if isinstance(info, str):
+            return info
+        if isinstance(info, dict):
+            return str(info.get("status", "?"))
+        return str(info)
+
     lines = []
-    for name, info in services.items():
-        status = info if isinstance(info, str) else info.get("status", "?")
+    # Down services first — they're the actionable signal in a weekly digest.
+    for name, info in sorted(
+        services.items(),
+        key=lambda kv: _status_of(kv[1]).upper() in ("UP", "RUNNING", "HEALTHY", "OK"),
+    ):
+        status = _status_of(info)
         is_up = status.upper() in ("UP", "RUNNING", "HEALTHY", "OK")
         emoji = "✅" if is_up else "\U0001F534"
         lines.append(f"{emoji} **{name}** — {status}")
-    return "\n".join(lines)
+    body = summary + "\n".join(lines)
+    # Discord caps an embed field value at 1024 chars; keep the (down-first)
+    # head and flag the overflow rather than letting the POST 400.
+    if len(body) > 1024:
+        body = body[:1000].rsplit("\n", 1)[0] + "\n… (truncated)"
+    return body
 
 
 def _format_notable(events: list[dict]) -> str:
