@@ -37,9 +37,10 @@ The `ops/` automations run as **individual OrbStack containers on the always-on 
 built on the mini and controlled remotely from the MacBook Air. tommybot stays a `raw_exec`
 Nomad job on the host (MLX needs Apple Metal — no GPU in a Linux container).
 
-- **Control plane:** the repo-root [`justfile`](./justfile) on the Air. `just setup` (once) →
-  `just deploy` (push + `git pull` + build on the mini) → `just up` / `down` / `ps` / `logs`
-  / `run-now`. It drives the mini's OrbStack engine via a docker context over SSH/Tailscale.
+- **Control plane:** the repo-root [`justfile`](./justfile) on the Air. `just deploy` (push +
+  `git pull` + build on the mini) → `just up` / `down` / `ps` / `logs` / `run-now`. Every
+  recipe runs over SSH/Tailscale (docker executes on the mini with OrbStack's bin on PATH) —
+  no docker client on the Air, no change to the mini's shell profile, no setup step.
 - **Secrets stay on the mini host** and are injected at `docker run` by `ops/run.sh` (read
   from `observability/{grafana,ask-dash}/.env`, `gh auth token`, transit's `service.yaml`).
   Nothing secret enters an image or this repo.

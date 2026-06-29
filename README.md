@@ -9,10 +9,10 @@ serves which purpose and where each config lives. No secrets are committed here.
 
 The automations in [`ops/`](./ops/) (digest, github, watcher; transit disabled) run as
 **individual OrbStack containers on the always-on Mac mini**, built on the mini and managed
-remotely from the MacBook Air. The repo-root [`justfile`](./justfile) is the control plane:
+remotely from the MacBook Air. The repo-root [`justfile`](./justfile) is the control plane
+(every recipe runs over SSH/Tailscale — nothing to install on the Air, no setup step):
 
 ```sh
-just setup     # once
 just deploy    # push + pull + build on the mini
 just up        # start the bots   ·   just ps / logs / down to manage
 ```

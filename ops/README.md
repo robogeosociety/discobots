@@ -32,11 +32,15 @@ ops/
 
 ## Operating (from the Air)
 
+Every recipe runs over SSH (Tailscale) — docker executes on the mini with OrbStack's bin on
+PATH. No docker client is needed on the Air and the mini's shell profile is untouched, so
+there's no setup step.
+
 ```sh
-just setup            # once: install docker client + create the 'mini' ssh context
 just deploy           # git push, then git pull + build images on the mini
 just up               # start digest, github, watcher (transit excluded)
 just ps               # list discobot containers + status
+just doctor           # confirm the mini's engine is reachable from the Air
 just logs github -f   # follow a bot's logs
 just run-now digest   # fire a periodic bot once (posts to Discord)
 just dry digest       # fire once in dry-run (no post)
