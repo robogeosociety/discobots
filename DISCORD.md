@@ -28,8 +28,23 @@ committed here** — see `.gitignore`.
 
 | Code | Reads | Repo |
 | --- | --- | --- |
-| `~/dev/discord-ops/` — `digest.py`, `github_discord.py`, `transit_discord.py`, `watcher.py`, `discord-mountain-notify.ts`, `discord-campsite-notify.ts` + `nomad/` jobs (discord-digest, discord-github, discord-transit) | webhooks from `observability/grafana/.env` | **none yet** — candidate to migrate here |
+| **`ops/`** (this repo) — `digest.py`, `github_discord.py`, `transit_discord.py`, `watcher.py`, `notify/*.ts`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env`; digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token` | `tommyroar/discobots` |
 | `~/dev/obsidian-automations/automations/discord_notify.py`, `enrichment_discord.py` | `DISCORD_BOT_TOKEN` (falls back to `tommybot/.env`), `DISCORD_WEBHOOK_URL*` | `tommyroar/obsidian-automations` |
+
+## Where the discobots run (OrbStack on the mini, managed from the Air)
+
+The `ops/` automations run as **individual OrbStack containers on the always-on Mac mini**,
+built on the mini and controlled remotely from the MacBook Air. tommybot stays a `raw_exec`
+Nomad job on the host (MLX needs Apple Metal — no GPU in a Linux container).
+
+- **Control plane:** the repo-root [`justfile`](./justfile) on the Air. `just setup` (once) →
+  `just deploy` (push + `git pull` + build on the mini) → `just up` / `down` / `ps` / `logs`
+  / `run-now`. It drives the mini's OrbStack engine via a docker context over SSH/Tailscale.
+- **Secrets stay on the mini host** and are injected at `docker run` by `ops/run.sh` (read
+  from `observability/{grafana,ask-dash}/.env`, `gh auth token`, transit's `service.yaml`).
+  Nothing secret enters an image or this repo.
+- **Bots:** `digest` (weekly Mon 08:15), `github` (every 30 min), `watcher` (daemon).
+  `transit` is built but **disabled** (documented known bug).
 
 ## Conventions
 
@@ -44,5 +59,9 @@ committed here** — see `.gitignore`.
 
 ## Open items
 
-- [ ] Migrate `~/dev/discord-ops/` into this repo (it's currently unversioned). Touches
-      Nomad job spec paths (`discord-ops/nomad/*`) — do as a deliberate, separate change.
+- [x] ~~Migrate `~/dev/discord-ops/` into this repo~~ — **done**: vendored into `ops/` and
+      re-architected as OrbStack containers (see above). Old Nomad `raw_exec` jobs
+      (`discord-digest`, `discord-github`) are retired at cutover; the original
+      `/Volumes/dev/discord-ops` is kept as `.discord-ops.bak` until the containers are proven.
+- [ ] The `.ts` notifiers (`ops/notify/`) have no scheduled trigger yet — wire or relocate to
+      `is-the-mountain-out` as a follow-up.
