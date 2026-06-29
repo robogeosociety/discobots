@@ -6,9 +6,8 @@
 # host.docker.internal, and `docker run`s each bot with --restart unless-stopped.
 # Re-running a bot recreates its container (picks up rotated secrets/new image).
 #
-#   ops/run.sh                  # start the enabled bots: digest, github, watcher
+#   ops/run.sh                  # start all bots: digest, github, watcher, transit
 #   ops/run.sh digest           # just one
-#   ops/run.sh transit          # the DISABLED bot — explicit opt-in (KNOWN BUG)
 #
 # Secret sources (host-side, unchanged from the old Nomad wrappers):
 #   grafana/.env   DISCORD_WEBHOOK_URL                       (all bots)
@@ -84,14 +83,15 @@ start_watcher() {
 }
 
 start_transit() {
-  # DISABLED by default — transit_discord.py has a documented KNOWN BUG.
+  # Posts to the dedicated transit channel (DISCORD_WEBHOOK_TRANSIT), falling
+  # back to the general webhook. OBA key comes from transit_tracker's config.
   local webhook oba
-  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)"
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_TRANSIT)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
   oba="$(grep -E '^[[:space:]]*oba_api_key:' "$TRANSIT_SVC" 2>/dev/null | head -1 \
         | sed -E 's/^[[:space:]]*oba_api_key:[[:space:]]*//; s/[[:space:]]*(#.*)?$//; s/^["'\'']//; s/["'\'']$//')"
   [ -n "$oba" ] && [ "$oba" != "TEST" ] || { echo "transit: no real oba_api_key in $TRANSIT_SVC" >&2; return 1; }
-  [ -n "$webhook" ] || { echo "transit: DISCORD_WEBHOOK_URL missing in grafana/.env" >&2; return 1; }
-  echo "transit: NOTE — known bug, starting anyway because you asked explicitly" >&2
+  [ -n "$webhook" ] || { echo "transit: no DISCORD_WEBHOOK_TRANSIT/URL in grafana/.env" >&2; return 1; }
   docker rm -f discobot-transit >/dev/null 2>&1 || true
   docker run -d --name discobot-transit "${common_run[@]}" \
     -e "OBA_API_KEY=$oba" -e "DISCORD_WEBHOOK_URL=$webhook" \
@@ -100,7 +100,7 @@ start_transit() {
 }
 
 bots=("$@")
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher)   # transit excluded by default
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit)
 for b in "${bots[@]}"; do
   case "$b" in
     digest)  start_digest ;;

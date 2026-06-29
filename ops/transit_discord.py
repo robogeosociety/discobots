@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Fetch OneBusAway service alerts for watched routes and post to Discord."""
+"""Fetch OneBusAway service alerts for watched routes and post to Discord.
+
+Source: OneBusAway's **GTFS-Realtime** service-alerts feed,
+`/api/gtfs_realtime/alerts-for-agency/<agencyId>.pb` (protobuf). The old REST
+`situations-for-agency` call this used was not a real OBA method and 404'd; the
+GTFS-RT endpoint is the supported agency-wide alerts source.
+"""
 
 from __future__ import annotations
 
@@ -11,13 +17,17 @@ import time
 from pathlib import Path
 
 import httpx
+from google.transit import gtfs_realtime_pb2
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-OBA_API_BASE = "https://api.pugetsound.onebusaway.org/api/where"
+# GTFS-Realtime alerts feed (protobuf), per agency: …/alerts-for-agency/<id>.pb
+OBA_GTFS_RT_BASE = "https://api.pugetsound.onebusaway.org/api/gtfs_realtime"
 
+# Watched routes, keyed by "<agencyId>_<gtfsRouteId>" — the same composite the
+# GTFS-RT feed yields from each informed_entity's (agency_id, route_id).
 WATCHED_ROUTES: dict[str, str] = {
     "1_100252": "Route 7",
     "1_100228": "Route 8",
@@ -27,7 +37,7 @@ WATCHED_ROUTES: dict[str, str] = {
     "40_2LINE": "2 Line",
 }
 
-# Agencies whose situations endpoint we poll
+# Agencies whose alerts feed we poll
 AGENCIES = ["1", "40"]  # 1 = King County Metro, 40 = Sound Transit
 
 STATE_DIR = Path.home() / ".local" / "share" / "transit-discord"
@@ -35,22 +45,14 @@ STATE_FILE = STATE_DIR / "state.json"
 
 STALE_DAYS = 7
 
-# Severity -> embed colour mapping
-SEVERITY_COLORS: dict[str, int] = {
-    # Red
-    "DETOUR": 0xE74C3C,
-    "NO_SERVICE": 0xE74C3C,
-    "SIGNIFICANT_DELAYS": 0xE74C3C,
-    # Orange
-    "construction": 0xE67E22,
-    "weather": 0xE67E22,
-    "MODERATE_DELAYS": 0xE67E22,
-    # Yellow (default for anything else)
-    "MINOR_DELAYS": 0xF1C40F,
-}
-
-DEFAULT_ALERT_COLOR = 0xF1C40F  # yellow / general info
+# GTFS-RT Effect -> embed colour
+RED = 0xE74C3C
+ORANGE = 0xE67E22
+YELLOW = 0xF1C40F
 CLEARED_COLOR = 0x2ECC71  # green
+
+EFFECT_RED = {"NO_SERVICE", "SIGNIFICANT_DELAYS", "DETOUR"}
+EFFECT_ORANGE = {"REDUCED_SERVICE", "MODIFIED_SERVICE", "STOP_MOVED"}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -75,24 +77,6 @@ def _get_discord_webhook_url() -> str | None:
     return None
 
 
-def _color_for_situation(situation: dict) -> int:
-    """Pick an embed colour based on severity or reason keywords."""
-    severity = situation.get("severity", "")
-    reason = situation.get("reason", "")
-
-    # Check severity first
-    if severity in SEVERITY_COLORS:
-        return SEVERITY_COLORS[severity]
-
-    # Check reason keywords
-    reason_lower = reason.lower() if reason else ""
-    for keyword in ("construction", "weather"):
-        if keyword in reason_lower:
-            return SEVERITY_COLORS[keyword]
-
-    return DEFAULT_ALERT_COLOR
-
-
 def _truncate(text: str, length: int = 200) -> str:
     if not text:
         return ""
@@ -102,110 +86,88 @@ def _truncate(text: str, length: int = 200) -> str:
     return text[: length - 1] + "…"
 
 
-def _affected_route_names(situation: dict) -> list[str]:
-    """Return display names of watched routes affected by a situation."""
-    names: list[str] = []
-    consequences = situation.get("consequences", [])
-    # Also check allAffectedRoutes / affectedRoutes at top level
-    affected = situation.get("allAffects", [])
-    if not affected:
-        affected = situation.get("affects", [])
-
-    route_ids: set[str] = set()
-
-    # Parse consequences -> conditionDetails -> affectedEntity -> routeId
-    for c in consequences:
-        details = c.get("conditionDetails", {})
-        entity = details.get("affectedEntity", {})
-        rid = entity.get("routeId")
-        if rid:
-            route_ids.add(rid)
-
-    # Parse affects (OBA v2 schema)
-    for a in affected if isinstance(affected, list) else [affected]:
-        if isinstance(a, dict):
-            routes = a.get("routes", [])
-            for r in routes if isinstance(routes, list) else [routes]:
-                if isinstance(r, dict):
-                    rid = r.get("routeId")
-                    if rid:
-                        route_ids.add(rid)
-
-    # Also scan allAffects -> routeId patterns
-    _scan_route_ids(situation, route_ids)
-
-    for rid in sorted(route_ids):
-        if rid in WATCHED_ROUTES:
-            names.append(WATCHED_ROUTES[rid])
-
-    return names
+def _translated(ts) -> str:
+    """First translation of a GTFS-RT TranslatedString, or ""."""
+    if ts and ts.translation:
+        return ts.translation[0].text or ""
+    return ""
 
 
-def _scan_route_ids(obj: dict | list, out: set[str]) -> None:
-    """Recursively scan for routeId values in the situation dict."""
-    if isinstance(obj, dict):
-        if "routeId" in obj:
-            out.add(obj["routeId"])
-        for v in obj.values():
-            if isinstance(v, (dict, list)):
-                _scan_route_ids(v, out)
-    elif isinstance(obj, list):
-        for item in obj:
-            if isinstance(item, (dict, list)):
-                _scan_route_ids(item, out)
+def _color_for_alert(effect: str, header: str) -> int:
+    """Embed colour from the GTFS-RT effect, with a header-keyword fallback."""
+    if effect in EFFECT_RED:
+        return RED
+    if effect in EFFECT_ORANGE:
+        return ORANGE
+    h = header.lower()
+    if any(k in h for k in ("detour", "no service", "significant delay")):
+        return RED
+    if any(k in h for k in ("delay", "closed", "closure", "reroute", "suspend", "relocat")):
+        return ORANGE
+    return YELLOW
+
+
+def _watched_routes_for(alert) -> list[str]:
+    """Display names of watched routes touched by a GTFS-RT alert (sorted, unique)."""
+    names: set[str] = set()
+    for ie in alert.informed_entity:
+        if not ie.route_id:
+            continue
+        # The feed gives the bare route_id + agency_id; recompose the watched key.
+        key = f"{ie.agency_id}_{ie.route_id}" if ie.agency_id else ie.route_id
+        if key in WATCHED_ROUTES:
+            names.add(WATCHED_ROUTES[key])
+    return sorted(names)
 
 
 # ---------------------------------------------------------------------------
-# OBA fetching
+# OBA GTFS-Realtime fetching
 # ---------------------------------------------------------------------------
 
 
-def fetch_situations(client: httpx.Client, agency: str) -> list[dict]:
-    """Fetch situations for an agency, returning the situation list."""
-    api_key = _get_oba_api_key()
-    url = f"{OBA_API_BASE}/situations-for-agency/{agency}.json"
-    params = {"key": api_key}
+def fetch_alerts(client: httpx.Client, agency: str) -> list[dict]:
+    """Fetch the agency's GTFS-RT alerts, normalised to dicts, watched routes only.
 
+    Each returned dict: {id, header, description, effect, cause, url, routes}.
+    """
+    url = f"{OBA_GTFS_RT_BASE}/alerts-for-agency/{agency}.pb"
+    params = {"key": _get_oba_api_key()}
     try:
         resp = client.get(url, params=params, timeout=15)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
-        print(f"[warn] OBA request failed for agency {agency}: {exc}", file=sys.stderr)
+        print(f"[warn] OBA alerts request failed for agency {agency}: {exc}", file=sys.stderr)
         return []
 
-    data = resp.json()
-    situations = (
-        data.get("data", {})
-        .get("entry", {})
-        .get("situations", [])
-    )
-    # Some OBA responses nest under "list" instead of "entry"
-    if not situations:
-        situations = (
-            data.get("data", {})
-            .get("list", [])
-        )
-    return situations if isinstance(situations, list) else []
+    feed = gtfs_realtime_pb2.FeedMessage()
+    try:
+        feed.ParseFromString(resp.content)
+    except Exception as exc:  # noqa: BLE001 — malformed protobuf shouldn't crash the poll
+        print(f"[warn] could not parse GTFS-RT feed for agency {agency}: {exc}", file=sys.stderr)
+        return []
 
-
-def filter_watched(situations: list[dict]) -> dict[str, dict]:
-    """Return {situation_id: situation} for situations touching watched routes."""
-    matched: dict[str, dict] = {}
-    watched_ids = set(WATCHED_ROUTES)
-
-    for sit in situations:
-        sit_id = sit.get("id")
-        if not sit_id:
+    out: list[dict] = []
+    for entity in feed.entity:
+        if not entity.HasField("alert"):
             continue
-
-        # Collect every routeId mentioned anywhere in the situation
-        route_ids: set[str] = set()
-        _scan_route_ids(sit, route_ids)
-
-        if route_ids & watched_ids:
-            matched[sit_id] = sit
-
-    return matched
+        alert = entity.alert
+        routes = _watched_routes_for(alert)
+        if not routes:
+            continue  # only alerts touching a watched route
+        effect = gtfs_realtime_pb2.Alert.Effect.Name(alert.effect) if alert.effect else ""
+        cause = gtfs_realtime_pb2.Alert.Cause.Name(alert.cause) if alert.cause else ""
+        out.append(
+            {
+                "id": entity.id,
+                "header": _translated(alert.header_text),
+                "description": _translated(alert.description_text),
+                "effect": "" if effect in ("", "UNKNOWN_EFFECT") else effect,
+                "cause": "" if cause in ("", "UNKNOWN_CAUSE") else cause,
+                "url": _translated(alert.url),
+                "routes": routes,
+            }
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -231,10 +193,7 @@ def save_state(state: dict) -> None:
 def prune_stale(state: dict) -> dict:
     """Remove entries older than STALE_DAYS."""
     cutoff = time.time() - STALE_DAYS * 86400
-    return {
-        k: v for k, v in state.items()
-        if v.get("first_seen", 0) > cutoff
-    }
+    return {k: v for k, v in state.items() if v.get("first_seen", 0) > cutoff}
 
 
 # ---------------------------------------------------------------------------
@@ -242,11 +201,7 @@ def prune_stale(state: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def post_to_discord(
-    client: httpx.Client,
-    webhook_url: str,
-    embeds: list[dict],
-) -> None:
+def post_to_discord(client: httpx.Client, webhook_url: str, embeds: list[dict]) -> None:
     """Post embeds to the Discord webhook. Never raises."""
     if not embeds:
         return
@@ -264,38 +219,28 @@ def post_to_discord(
             print(f"[warn] Discord post failed: {exc}", file=sys.stderr)
 
 
-def build_new_alert_embed(situation: dict) -> dict:
+def build_new_alert_embed(alert: dict) -> dict:
     """Build a Discord embed for a new or updated alert."""
-    summary = situation.get("summary", {})
-    summary_text = summary.get("value", "") if isinstance(summary, dict) else str(summary)
-
-    description = situation.get("description", {})
-    desc_text = description.get("value", "") if isinstance(description, dict) else str(description)
-
-    affected = _affected_route_names(situation)
-    color = _color_for_situation(situation)
-    severity = situation.get("severity", "unknown")
-    reason = situation.get("reason", "")
-
-    route_label = ", ".join(affected) if affected else "Multiple routes"
+    routes = alert.get("routes") or []
+    route_label = ", ".join(routes) if routes else "Multiple routes"
 
     embed: dict = {
         "title": f"Transit Alert — {route_label}",
-        "color": color,
+        "color": _color_for_alert(alert.get("effect", ""), alert.get("header", "")),
         "fields": [],
     }
-
-    if summary_text:
-        embed["fields"].append({"name": "Summary", "value": summary_text, "inline": False})
-    if desc_text:
-        embed["fields"].append({"name": "Details", "value": _truncate(desc_text), "inline": False})
-    if affected:
-        embed["fields"].append({"name": "Affected Routes", "value": ", ".join(affected), "inline": True})
-    if severity:
-        embed["fields"].append({"name": "Severity", "value": severity, "inline": True})
-    if reason:
-        embed["fields"].append({"name": "Reason", "value": reason, "inline": True})
-
+    if alert.get("url"):
+        embed["url"] = alert["url"]
+    if alert.get("header"):
+        embed["fields"].append({"name": "Summary", "value": _truncate(alert["header"]), "inline": False})
+    if alert.get("description"):
+        embed["fields"].append({"name": "Details", "value": _truncate(alert["description"]), "inline": False})
+    if routes:
+        embed["fields"].append({"name": "Affected Routes", "value": ", ".join(routes), "inline": True})
+    if alert.get("effect"):
+        embed["fields"].append({"name": "Effect", "value": alert["effect"].replace("_", " ").title(), "inline": True})
+    if alert.get("cause"):
+        embed["fields"].append({"name": "Cause", "value": alert["cause"].replace("_", " ").title(), "inline": True})
     return embed
 
 
@@ -315,6 +260,15 @@ def build_cleared_embed(alert_id: str, state_entry: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def _state_entry(alert: dict) -> dict:
+    routes = alert.get("routes") or []
+    return {
+        "first_seen": time.time(),
+        "route_label": ", ".join(routes) if routes else "Transit",
+        "summary": alert.get("header", ""),
+    }
+
+
 def run(dry: bool = False) -> None:
     webhook_url = _get_discord_webhook_url()
     if not webhook_url and not dry:
@@ -324,11 +278,11 @@ def run(dry: bool = False) -> None:
     state = prune_stale(load_state())
 
     with httpx.Client() as client:
-        # Gather all situations across agencies
+        # Gather watched-route alerts across agencies
         current_alerts: dict[str, dict] = {}
         for agency in AGENCIES:
-            situations = fetch_situations(client, agency)
-            current_alerts.update(filter_watched(situations))
+            for alert in fetch_alerts(client, agency):
+                current_alerts[alert["id"]] = alert
 
         current_ids = set(current_alerts)
         previous_ids = set(state)
@@ -339,40 +293,21 @@ def run(dry: bool = False) -> None:
         new_embeds: list[dict] = []
         cleared_embeds: list[dict] = []
 
-        # Build embeds for new alerts
+        # New alerts
         for alert_id in sorted(new_ids):
-            sit = current_alerts[alert_id]
-            embed = build_new_alert_embed(sit)
-            new_embeds.append(embed)
+            alert = current_alerts[alert_id]
+            new_embeds.append(build_new_alert_embed(alert))
+            state[alert_id] = _state_entry(alert)
 
-            # Persist metadata for later cleared messages
-            affected = _affected_route_names(sit)
-            summary = sit.get("summary", {})
-            summary_text = summary.get("value", "") if isinstance(summary, dict) else str(summary)
-            state[alert_id] = {
-                "first_seen": time.time(),
-                "route_label": ", ".join(affected) if affected else "Transit",
-                "summary": summary_text,
-            }
-
-        # Build embeds for cleared alerts
+        # Cleared alerts
         for alert_id in sorted(cleared_ids):
             entry = state.pop(alert_id, {})
-            embed = build_cleared_embed(alert_id, entry)
-            cleared_embeds.append(embed)
+            cleared_embeds.append(build_cleared_embed(alert_id, entry))
 
-        # Ensure still-active alerts stay in state
+        # Keep still-active alerts in state (preserve first_seen if already known)
         for alert_id in current_ids:
             if alert_id not in state:
-                sit = current_alerts[alert_id]
-                affected = _affected_route_names(sit)
-                summary = sit.get("summary", {})
-                summary_text = summary.get("value", "") if isinstance(summary, dict) else str(summary)
-                state[alert_id] = {
-                    "first_seen": time.time(),
-                    "route_label": ", ".join(affected) if affected else "Transit",
-                    "summary": summary_text,
-                }
+                state[alert_id] = _state_entry(current_alerts[alert_id])
 
         all_embeds = new_embeds + cleared_embeds
 

@@ -11,7 +11,7 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **digest** | `discobot-digest` | weekly, Mon 08:15 PT | InfluxDB `:8086`, dev-status `:8077`, Discord | `ask-dash/.env` InfluxDB creds + `grafana/.env` webhook |
 | **github** | `discobot-github` | every 30 min | GitHub (`gh api`), Discord | `gh auth token` + `grafana/.env` webhook |
 | **watcher** | `discobot-watcher` | daemon (poll loop) | dev-status `:8077`, Discord | `grafana/.env` webhook |
-| **transit** | `discobot-transit` | every 5 min | OneBusAway, Discord | transit `service.yaml` key + webhook — **DISABLED (known bug)** |
+| **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
 
 A container reaches the mini's localhost services (InfluxDB, dev-status) via
 `host.docker.internal`; `run.sh` rewrites `localhost`/`127.0.0.1` URLs accordingly.
@@ -37,7 +37,7 @@ there's no setup step.
 
 ```sh
 just deploy           # git push, then git pull + build images on the mini
-just up               # start digest, github, watcher (transit excluded)
+just up               # start all bots: digest, github, watcher, transit
 just ps               # list discobot containers + status
 just doctor           # confirm the mini's engine is reachable from the Air
 just logs github -f   # follow a bot's logs
@@ -46,7 +46,9 @@ just dry digest       # fire once in dry-run (no post)
 just down [bot...]    # stop/remove containers
 ```
 
-`just up transit` starts the disabled bot explicitly (it has a documented OneBusAway bug).
+All four bots start by default. `transit` reads OneBusAway's GTFS-Realtime alerts feed
+(`/api/gtfs_realtime/alerts-for-agency/<id>.pb`) and posts watched-route alerts to the transit
+channel.
 
 ## Notes
 

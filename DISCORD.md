@@ -44,8 +44,8 @@ Nomad job on the host (MLX needs Apple Metal — no GPU in a Linux container).
 - **Secrets stay on the mini host** and are injected at `docker run` by `ops/run.sh` (read
   from `observability/{grafana,ask-dash}/.env`, `gh auth token`, transit's `service.yaml`).
   Nothing secret enters an image or this repo.
-- **Bots:** `digest` (weekly Mon 08:15), `github` (every 30 min), `watcher` (daemon).
-  `transit` is built but **disabled** (documented known bug).
+- **Bots:** `digest` (weekly Mon 08:15), `github` (every 30 min), `watcher` (daemon),
+  `transit` (every 5 min — OneBusAway GTFS-RT alerts for watched routes → transit channel).
 
 ## Conventions
 
