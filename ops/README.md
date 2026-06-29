@@ -21,7 +21,6 @@ A container reaches the mini's localhost services (InfluxDB, dev-status) via
 ```
 ops/
   digest.py  github_discord.py  transit_discord.py  watcher.py   # the bots
-  notify/  *.ts                  # mountain/campsite notifiers (no trigger yet)
   docker/
     base.Dockerfile             # shared python+supercronic, carries all scripts
     <bot>/Dockerfile + crontab  # per-bot image; periodic bots run supercronic

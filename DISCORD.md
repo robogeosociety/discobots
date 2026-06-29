@@ -28,7 +28,7 @@ committed here** — see `.gitignore`.
 
 | Code | Reads | Repo |
 | --- | --- | --- |
-| **`ops/`** (this repo) — `digest.py`, `github_discord.py`, `transit_discord.py`, `watcher.py`, `notify/*.ts`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env`; digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token` | `tommyroar/discobots` |
+| **`ops/`** (this repo) — `digest.py`, `github_discord.py`, `transit_discord.py`, `watcher.py`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env`; digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token` | `tommyroar/discobots` |
 | `~/dev/obsidian-automations/automations/discord_notify.py`, `enrichment_discord.py` | `DISCORD_BOT_TOKEN` (falls back to `tommybot/.env`), `DISCORD_WEBHOOK_URL*` | `tommyroar/obsidian-automations` |
 
 ## Where the discobots run (OrbStack on the mini, managed from the Air)
@@ -64,5 +64,8 @@ Nomad job on the host (MLX needs Apple Metal — no GPU in a Linux container).
       re-architected as OrbStack containers (see above). Old Nomad `raw_exec` jobs
       (`discord-digest`, `discord-github`) are retired at cutover; the original
       `/Volumes/dev/discord-ops` is kept as `.discord-ops.bak` until the containers are proven.
-- [ ] The `.ts` notifiers (`ops/notify/`) have no scheduled trigger yet — wire or relocate to
-      `is-the-mountain-out` as a follow-up.
+- [x] ~~The `.ts` notifiers have no trigger~~ — **resolved**: they were misfiled Cloudflare
+      **Worker** modules, not mini bots. The canonical mountain notifier lives in
+      `is-the-mountain-out/worker/src/discord-mountain-notify.ts` (fires from that Worker's
+      `scheduled()` handler); campsite notifications live in
+      `robot-geographical-society/backend/src/discord.ts`. Stale copies removed from this repo.
