@@ -1,0 +1,3 @@
+# Weekly ops digest — Monday 08:15. TZ comes from the container's TZ env
+# (set to America/Los_Angeles by run.sh), matching the old Nomad periodic.
+15 8 * * 1 python /app/digest.py

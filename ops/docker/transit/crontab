@@ -1,0 +1,3 @@
+# Transit alerts → Discord, every 5 minutes. (Container disabled by default —
+# see Dockerfile note + ops/README.md.)
+*/5 * * * * python /app/transit_discord.py

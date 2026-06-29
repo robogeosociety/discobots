@@ -1,0 +1,2 @@
+# GitHub activity → Discord, every 30 minutes.
+*/30 * * * * python /app/github_discord.py
