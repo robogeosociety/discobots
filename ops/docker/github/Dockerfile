@@ -13,4 +13,5 @@ RUN tar -xzf /tmp/gh.tgz -C /tmp \
  && rm -rf /tmp/gh*
 
 COPY docker/github/crontab /app/crontab
-CMD ["supercronic", "/app/crontab"]
+# -no-reap: see digest/Dockerfile (OrbStack VM kernel + supercronic reaper).
+CMD ["supercronic", "-no-reap", "/app/crontab"]

@@ -5,4 +5,5 @@
 # Build context = ops/ :  docker build -f docker/transit/Dockerfile -t discobot-transit .
 FROM discobot-base:latest
 COPY docker/transit/crontab /app/crontab
-CMD ["supercronic", "/app/crontab"]
+# -no-reap: see digest/Dockerfile (OrbStack VM kernel + supercronic reaper).
+CMD ["supercronic", "-no-reap", "/app/crontab"]
