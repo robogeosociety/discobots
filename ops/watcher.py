@@ -206,7 +206,11 @@ class WatcherState:
     ) -> None:
         # --- Handle dev-status being unreachable ---
         if current is None:
-            if not self.server_unreachable_alerted:
+            # Only alert once we've had a successful poll. A failure before that
+            # is a startup/connectivity warm-up (e.g. a freshly (re)started
+            # container whose host.docker.internal path isn't ready yet), not an
+            # outage — alerting there would false-fire on every restart.
+            if self.initialised and not self.server_unreachable_alerted:
                 notify_server_unreachable(webhook, dry_run)
                 self.server_unreachable_alerted = True
             return
