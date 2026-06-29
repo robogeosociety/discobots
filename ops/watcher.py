@@ -70,14 +70,24 @@ def _normalize_status(raw: str) -> str:
 def _parse_services(data) -> dict[str, str]:
     """Turn dev-status response into {name: "UP"|"DOWN"} map."""
     services: dict[str, str] = {}
-    if isinstance(data, dict):
-        for name, info in data.items():
-            status = info if isinstance(info, str) else info.get("status", "UNKNOWN")
-            services[name] = _normalize_status(status)
+    # Current dev-status shape: {"deployments": [{"name", "up": 0|1, ...}]}.
+    if isinstance(data, dict) and isinstance(data.get("deployments"), list):
+        for entry in data["deployments"]:
+            name = entry.get("name", entry.get("service", "unknown"))
+            services[name] = "UP" if entry.get("up") else "DOWN"
+    # Alternate shapes: a bare list of {name,status}, or a dict service->status.
     elif isinstance(data, list):
         for entry in data:
             name = entry.get("name", entry.get("service", "unknown"))
-            status = entry.get("status", "UNKNOWN")
+            services[name] = _normalize_status(entry.get("status", "UNKNOWN"))
+    elif isinstance(data, dict):
+        for name, info in data.items():
+            if isinstance(info, str):
+                status = info
+            elif isinstance(info, dict):
+                status = info.get("status", "UNKNOWN")
+            else:
+                continue  # skip scalar metadata fields (total, generated_unix, …)
             services[name] = _normalize_status(status)
     return services
 
