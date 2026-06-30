@@ -60,6 +60,27 @@ just down          # stop/remove containers
 just doctor        # confirm the mini's engine is reachable from the Air
 ```
 
+## Obsidian link redirector (`/o`)
+
+Discord only makes `http(s)` links clickable — never `obsidian://`. So Obsidian note links
+posted to Discord (by the **claudesidian** enrichment bot, and the obsidian-automations daily/
+weekly pipelines) go through a tiny **tailnet redirector**:
+
+```
+https://tommys-mac-mini.tail59a169.ts.net/o?vault=home&file=Trips%2FLAX%20Summer%20Break
+                                              └── same query as obsidian://open ──┘
+```
+
+Tapping it opens the page, which bounces the browser to `obsidian://open?…` → the note opens in
+Obsidian. **It's not a service** — [`ops/obsidian-redirect.html`](./ops/obsidian-redirect.html)
+(a one-line client-side JS redirect) is served **directly by `tailscale serve`**, so there's no
+process or container behind it.
+
+Setup (once): `ops/redirect-install.sh` on the mini stages the page to the internal disk and
+prints the one-time `sudo tailscale serve --set-path /o …` (serving a file needs root; it
+persists across reboots). Tailnet-only, so it works on any of Tommy's Tailscale devices. See
+[`ops/README.md`](./ops/README.md#obsidian-link-redirector-o).
+
 ## Conventions
 
 - **Secrets never enter this repo.** `.env` files are git-ignored; `ops/run.sh` reads them
