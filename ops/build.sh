@@ -14,7 +14,7 @@ docker info >/dev/null 2>&1 || {
 echo "==> discobot-base"
 docker build -f docker/base.Dockerfile -t discobot-base:latest .
 
-for bot in digest github transit watcher redirect; do
+for bot in digest github transit watcher; do
   echo "==> discobot-$bot"
   docker build -f "docker/$bot/Dockerfile" -t "discobot-$bot:latest" .
 done

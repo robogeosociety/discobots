@@ -1,0 +1,12 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Opening in Obsidian…</title>
+<script>
+  // https→obsidian:// bridge. Discord only makes http(s) links clickable, so
+  // claudesidian/the pipelines post a link to this page; the browser bounces to
+  // the obsidian:// URI. The query string IS the obsidian://open query, verbatim.
+  var q = location.search.slice(1);
+  if (q) location.replace("obsidian://open?" + q);
+</script>
+<p>Opening in Obsidian… if nothing happens, make sure Obsidian is installed and you're on the tailnet.</p>

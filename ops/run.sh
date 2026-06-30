@@ -99,25 +99,14 @@ start_transit() {
   echo "started discobot-transit (every 5 min)"
 }
 
-start_redirect() {
-  # Stateless https→obsidian:// link bridge; published only on the host
-  # loopback (tailscale serve fronts it on the tailnet). No secrets.
-  docker rm -f discobot-redirect >/dev/null 2>&1 || true
-  docker run -d --name discobot-redirect "${common_run[@]}" \
-    -p 127.0.0.1:8099:8099 \
-    discobot-redirect:latest >/dev/null
-  echo "started discobot-redirect (obsidian:// link bridge on 127.0.0.1:8099)"
-}
-
 bots=("$@")
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit redirect)
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit)
 for b in "${bots[@]}"; do
   case "$b" in
-    digest)   start_digest ;;
-    github)   start_github ;;
-    watcher)  start_watcher ;;
-    transit)  start_transit ;;
-    redirect) start_redirect ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|redirect)" >&2; exit 2 ;;
+    digest)  start_digest ;;
+    github)  start_github ;;
+    watcher) start_watcher ;;
+    transit) start_transit ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit)" >&2; exit 2 ;;
   esac
 done

@@ -58,3 +58,17 @@ channel.
   on the always-on mini, so bots return after a reboot.
 - `github`'s seen-event state lives in the named volume `discobot-github-state` (so it doesn't
   re-post history when the container is recreated).
+
+## Obsidian link redirector (`/o`)
+
+Discord only makes `http(s)` links clickable, never `obsidian://`. So Obsidian note links posted
+to Discord (by claudesidian, and the pipelines if you point them at it) use the **redirector**:
+`https://tommys-mac-mini.tail59a169.ts.net/o?vault=<v>&file=<percent-encoded path>` — same query
+as `obsidian://open`, just under the tailnet https origin; tapping it bounces the browser to
+Obsidian.
+
+It's **not a service** — `obsidian-redirect.html` (a one-line client-side JS redirect) is served
+**directly by `tailscale serve`**, no process or container. Install/refresh with
+`ops/redirect-install.sh` on the mini (stages the page to the internal disk and prints the
+one-time `sudo tailscale serve --set-path /o …` — file-serving needs root; it persists across
+reboots).
