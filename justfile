@@ -59,6 +59,16 @@ ps:
 logs bot *flags:
     ssh {{mini_host}} '{{dk}} logs {{flags}} --tail 100 discobot-{{bot}}'
 
+# --- fleet (channel-session control plane) --------------------------------
+
+# Manage the Claude Code channel-session fleet (local config on the mini):
+#   just fleet ls
+#   just fleet session set-cwd|set-model|restart <name> [arg]
+#   just fleet skill ls|link|unlink <name> [skill]
+#   just fleet emoji set <name> <emoji>   |   just fleet alias set <name> <pattern...>
+fleet *args:
+    ssh {{mini_host}} 'cd {{mini_repo}} && python3 ops/fleet.py {{args}}'
+
 # Fire a periodic bot once now (runs its script in the live container).
 run-now bot:
     #!/usr/bin/env bash
