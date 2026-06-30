@@ -24,4 +24,4 @@ RUN chmod +x /usr/local/bin/supercronic
 
 WORKDIR /app
 # All bot scripts live in one base image; each per-bot image just selects one.
-COPY digest.py transit_discord.py github_discord.py watcher.py /app/
+COPY digest.py transit_discord.py github_discord.py watcher.py skills_discord.py /app/
