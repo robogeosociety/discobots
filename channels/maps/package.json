@@ -1,0 +1,9 @@
+{
+  "name": "mapbot-workspace",
+  "private": true,
+  "type": "module",
+  "description": "MapBot render helpers (Playwright headless Mapbox GL renderer)",
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}
