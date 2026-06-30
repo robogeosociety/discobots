@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 275866493, "name": "Highlands Forest View Park", "category": "park", "tags": ["park"], "sources": ["osm"], "address": "14354 Southeast 92nd Street"}, "geometry": {"type": "Point", "coordinates": [-122.1488754, 47.5188878]}}]}

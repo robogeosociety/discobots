@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 742059443, "name": "Shenstone Neighborhood Park", "category": "park", "tags": ["park"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.1542764, 47.386227]}}]}

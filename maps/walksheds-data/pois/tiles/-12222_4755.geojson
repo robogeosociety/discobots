@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "71d8329e-6f52-438b-b7bc-55f9420bb817", "name": "Mount Rainier National Park", "category": "park", "tags": ["park", "national"], "sources": ["overture"], "website": "http://www.nps.gov/mora/index.htm"}, "geometry": {"type": "Point", "coordinates": [-122.2128983, 47.5534286]}}]}

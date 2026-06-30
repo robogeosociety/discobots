@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "77bfaa94-9f93-4115-a930-2c55eccdfab2", "name": "Starbucks", "category": "cafe", "tags": ["cafe", "coffee"], "sources": ["overture"], "phone": "4252513267", "address": "18016 71st Ave S (180th & W Valley Hwy, - Kent)"}, "geometry": {"type": "Point", "coordinates": [-122.2495651, 47.3524055]}}]}

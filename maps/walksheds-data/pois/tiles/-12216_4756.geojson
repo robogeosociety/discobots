@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 392541403, "name": "Somerset Recreational Club", "category": "sports_centre", "tags": ["sports-centre"], "sources": ["osm"], "website": "https://somersetrec.org/"}, "geometry": {"type": "Point", "coordinates": [-122.1593911, 47.5657946]}}]}

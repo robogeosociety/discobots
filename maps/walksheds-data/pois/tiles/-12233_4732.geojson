@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 903636476, "name": "Penny's Park", "category": "playground", "tags": ["playground"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.3251274, 47.3269595]}}]}

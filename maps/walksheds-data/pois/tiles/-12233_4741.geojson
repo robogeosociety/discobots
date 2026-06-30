@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 703794042, "name": "Water Tower Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "website": "https://www.dmgov.org/Departments/Parks/Pages/Tower.aspx", "address": "504 S 208th St"}, "geometry": {"type": "Point", "coordinates": [-122.3280237, 47.4156652]}}]}

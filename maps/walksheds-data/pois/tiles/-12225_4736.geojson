@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 25911129, "name": "Foster Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "website": "http://www.olyfinancial.com", "phone": "+12538565000", "address": "S 259th St & 74th Ave S"}, "geometry": {"type": "Point", "coordinates": [-122.2416948, 47.3695374]}}]}

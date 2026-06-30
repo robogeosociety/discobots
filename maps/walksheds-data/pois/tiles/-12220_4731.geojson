@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 25795529, "name": "Auburndale Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "phone": "+12539313000", "address": "31700 108th Ave SE"}, "geometry": {"type": "Point", "coordinates": [-122.1964076, 47.3181504]}}]}

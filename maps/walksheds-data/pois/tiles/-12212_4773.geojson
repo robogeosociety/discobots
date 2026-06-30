@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 480083704, "name": "Hollywood Hill Greenbelt", "category": "park", "tags": ["park"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.1120684, 47.7309207]}}]}

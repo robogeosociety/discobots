@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 1047298632, "name": "Bridle Trails Valley Creek Park", "category": "park", "tags": ["park"], "sources": ["osm"], "address": "4432 140th Avenue Northeast", "hours": "dawn-dusk"}, "geometry": {"type": "Point", "coordinates": [-122.1526815, 47.6507434]}}]}

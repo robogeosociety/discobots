@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 171820624, "name": "English Gardens Park", "category": "garden", "tags": ["garden"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.3519577, 47.3037995]}}]}

@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 4787311981, "name": "Wind Gyro #2", "category": "artwork", "tags": ["artwork"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.2097678, 47.6953862]}}]}

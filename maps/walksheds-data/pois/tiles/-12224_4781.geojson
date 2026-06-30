@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 650777846, "name": "Highland Court Park", "category": "park", "tags": ["park"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.2347767, 47.8197608]}}]}

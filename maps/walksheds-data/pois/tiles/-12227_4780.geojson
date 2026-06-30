@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 400928846, "name": "Brierwood Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "website": "http://www.brierwoodchildcare.com", "phone": "+14257755440", "address": "Brierwood Park, 2655 Elm Dr"}, "geometry": {"type": "Point", "coordinates": [-122.2690416, 47.8052367]}}]}

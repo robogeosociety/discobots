@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "c458d2bf-5e04-40f3-9c7d-d031a94ce502", "name": "Blazing Onion", "category": "restaurant", "tags": ["restaurant", "burger"], "sources": ["overture"], "phone": "+14256409100", "address": "1018 187th Pl SW"}, "geometry": {"type": "Point", "coordinates": [-122.2471313, 47.8286781]}}]}

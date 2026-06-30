@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "08240e72-60a5-492c-81be-105279cfac52", "name": "Denny Park", "category": "park", "tags": ["park"], "sources": ["overture"], "address": "73rd Pl NE"}, "geometry": {"type": "Point", "coordinates": [-122.2455444, 47.7081985]}}]}

@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "e126c79e-1412-4bb4-94bd-4dc0d01664de", "name": "Clyde Hill City Park", "category": "park", "tags": ["park"], "sources": ["overture"], "address": "95th Ave NE"}, "geometry": {"type": "Point", "coordinates": [-122.2140045, 47.6306076]}}]}

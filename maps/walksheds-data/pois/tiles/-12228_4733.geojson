@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "1b378081-4473-47a7-a4c3-b4b7800334ca", "name": "Camelot Park", "category": "park", "tags": ["park"], "sources": ["overture"], "phone": "+12064774527", "address": "4198 S 296th St"}, "geometry": {"type": "Point", "coordinates": [-122.2770462, 47.3371086]}}]}

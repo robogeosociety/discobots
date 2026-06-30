@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 422104774, "name": "Lake Youngs Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "phone": "+12064774527", "address": "148th Ave SE &, SE 195th Pl"}, "geometry": {"type": "Point", "coordinates": [-122.145248, 47.4279238]}}]}

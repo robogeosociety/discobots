@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "c2856fa9-983f-4f13-ba4b-2c16ee106b11", "name": "Seward Park North Beach", "category": "park", "tags": ["park"], "sources": ["overture"], "address": "5900 Lake Washington Blvd S"}, "geometry": {"type": "Point", "coordinates": [-122.2533646, 47.561821]}}]}

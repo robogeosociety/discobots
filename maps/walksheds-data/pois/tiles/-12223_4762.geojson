@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "22dcd07b-89d0-49e7-9274-77d52fc5b875", "name": "Medina Dog Park", "category": "park", "tags": ["park", "dog"], "sources": ["overture"], "address": "909 82nd Ave NE"}, "geometry": {"type": "Point", "coordinates": [-122.2298431, 47.6200829]}}]}

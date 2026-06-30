@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 56178741, "name": "Keystone Place", "category": "park", "tags": ["park"], "sources": ["osm"], "website": "https://www.seattle.gov/parks/allparks/keystone-place"}, "geometry": {"type": "Point", "coordinates": [-122.3337544, 47.6702859]}}]}

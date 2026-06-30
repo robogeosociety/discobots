@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 649789964, "name": "Elsie's Bay Manor", "category": "guest_house", "tags": ["guest-house"], "sources": ["osm"], "address": "27615 10th Avenue South"}, "geometry": {"type": "Point", "coordinates": [-122.322328, 47.3537303]}}]}

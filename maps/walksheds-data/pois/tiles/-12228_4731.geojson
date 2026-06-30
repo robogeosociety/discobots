@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "3fd51f51-a5d3-4013-8d35-3669eec7d767", "name": "Flight Club Foundation", "category": "fitness_centre", "tags": ["fitness-centre", "gym"], "sources": ["overture"], "phone": "+12539514452", "address": "31425 52nd Ave S"}, "geometry": {"type": "Point", "coordinates": [-122.2704391, 47.3198586]}}]}

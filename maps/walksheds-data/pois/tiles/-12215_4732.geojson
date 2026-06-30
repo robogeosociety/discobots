@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 738117895, "name": "Pacific Raceways", "category": "sports_centre", "tags": ["sports-centre", "motor"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.1445671, 47.3224223]}}]}

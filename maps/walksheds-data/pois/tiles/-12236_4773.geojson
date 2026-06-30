@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 1122954026, "name": "Westminster Park", "category": "park", "tags": ["park"], "sources": ["osm"], "address": "709 North 150th Street"}, "geometry": {"type": "Point", "coordinates": [-122.3503389, 47.7375457]}}]}

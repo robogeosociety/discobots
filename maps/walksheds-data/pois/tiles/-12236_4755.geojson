@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 3211765157, "name": "Geo-Slice", "category": "artwork", "tags": ["artwork"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.350667, 47.559067]}}]}

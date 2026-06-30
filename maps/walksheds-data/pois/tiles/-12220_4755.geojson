@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "8464d08a-95aa-4ab9-923b-07a3495be1e0", "name": "Vasa Park", "category": "park", "tags": ["park"], "sources": ["overture"], "address": "Vasa Park"}, "geometry": {"type": "Point", "coordinates": [-122.1945114, 47.5521278]}}]}

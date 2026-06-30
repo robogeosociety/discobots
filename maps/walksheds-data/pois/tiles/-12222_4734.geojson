@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "c3ddc67a-8d04-4896-acd0-a7d5db51d7ed", "name": "Monterey Park", "category": "park", "tags": ["park"], "sources": ["overture"]}, "geometry": {"type": "Point", "coordinates": [-122.217186, 47.3452606]}}]}

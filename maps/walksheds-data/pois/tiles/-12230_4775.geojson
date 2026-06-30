@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "e7df4974-4371-4092-b486-c602b25cd51d", "name": "Lake Forest Park, Seattle, Washington", "category": "park", "tags": ["park"], "sources": ["overture"]}, "geometry": {"type": "Point", "coordinates": [-122.2909393, 47.7553635]}}]}

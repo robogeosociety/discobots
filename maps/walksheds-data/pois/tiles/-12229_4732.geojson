@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 1323076730, "name": "Lake Dollof Access Area", "category": "park", "tags": ["park"], "sources": ["osm"], "website": "https://wdfw.wa.gov/places-to-go/water-access-sites/lake-dolloff-346", "hours": "dawn-dusk"}, "geometry": {"type": "Point", "coordinates": [-122.2841368, 47.3232]}}]}

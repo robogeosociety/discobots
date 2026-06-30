@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "ed9fc2f5-66a1-4316-bab6-c1e2d9ffbe1b", "name": "Pupuseria San Luis", "category": "fast_food", "tags": ["fast-food", "fast", "food"], "sources": ["overture"], "phone": "+14252865825", "address": "1332 192nd St SE"}, "geometry": {"type": "Point", "coordinates": [-122.2142639, 47.8233833]}}]}

@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 33833800, "name": "Gold Creek Park", "category": "park", "tags": ["park"], "sources": ["osm"], "address": "16020 148th Avenue Northeast"}, "geometry": {"type": "Point", "coordinates": [-122.1394395, 47.7427213]}}]}

@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 1135376922, "name": "Doug Allen Sportsfields", "category": "park", "tags": ["park"], "sources": ["osm"], "address": "19827 88th Avenue Northeast", "hours": "sunrise-sunset"}, "geometry": {"type": "Point", "coordinates": [-122.225552, 47.7694855]}}]}

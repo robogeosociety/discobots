@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "c476d858-58f6-4d98-a66f-3458c6cc9323", "name": "Renton Abbey", "category": "bar", "tags": ["bar"], "sources": ["overture"], "address": "14603 164th Pl SE"}, "geometry": {"type": "Point", "coordinates": [-122.1213837, 47.4716797]}}]}

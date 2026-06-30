@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 422104764, "name": "Cascade Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "website": "http://www.cascadeparkanimalhospital.com", "phone": "+12064081659", "address": "16091 123rd Ave SE"}, "geometry": {"type": "Point", "coordinates": [-122.1757028, 47.458226]}}]}

@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 655458570, "name": "Concessions", "category": "fast_food", "tags": ["fast-food"], "sources": ["osm"]}, "geometry": {"type": "Point", "coordinates": [-122.1393097, 47.3209954]}}]}

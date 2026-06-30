@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "5d535620-46a4-402d-b08d-06d4aba07262", "name": "South Woods Park", "category": "park", "tags": ["park"], "sources": ["overture"], "phone": "+12063635517", "address": "2210 NE 150th St"}, "geometry": {"type": "Point", "coordinates": [-122.3052444, 47.7380676]}}]}

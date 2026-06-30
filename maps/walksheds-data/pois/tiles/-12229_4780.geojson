@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 975857141, "name": "Brier Patch Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "address": "216th Dr SW", "hours": "sunrise-sunset"}, "geometry": {"type": "Point", "coordinates": [-122.2819678, 47.802599]}}]}

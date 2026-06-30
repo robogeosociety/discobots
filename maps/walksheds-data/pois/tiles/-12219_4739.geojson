@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "928da50b-5ac0-41a0-8489-18eb1181c0cb", "name": "North Meridian Park", "category": "park", "tags": ["park"], "sources": ["overture"], "website": "http://northmeridianpark.placeweb.site", "address": "22828 120th Ave SE"}, "geometry": {"type": "Point", "coordinates": [-122.1811447, 47.3946266]}}]}

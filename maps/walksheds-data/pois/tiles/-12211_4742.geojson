@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 1449734994, "name": "Shady Lake Boat Launch", "category": "park", "tags": ["park"], "sources": ["osm"], "website": "https://wdfw.wa.gov/places-to-go/water-access-sites/shady-lake-592"}, "geometry": {"type": "Point", "coordinates": [-122.1066608, 47.4279122]}}]}

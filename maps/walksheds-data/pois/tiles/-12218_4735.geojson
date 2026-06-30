@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 365201616, "name": "Springwood Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "website": "http://www.kentwa.gov", "phone": "+12538565000", "address": "12700 SE 274th St"}, "geometry": {"type": "Point", "coordinates": [-122.1721165, 47.3555239]}}]}

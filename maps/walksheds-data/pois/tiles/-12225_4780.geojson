@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": "1a17edfe-3acf-4f33-8f84-642efbdb6246", "name": "Logan Ridge & Elberta Rd Food Trucks Stop", "category": "fast_food", "tags": ["fast-food", "food", "truck"], "sources": ["overture"], "address": "20919 Elberta Rd"}, "geometry": {"type": "Point", "coordinates": [-122.2483978, 47.8085556]}}]}

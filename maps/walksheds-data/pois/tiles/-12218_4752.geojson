@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"id": 1082232063, "name": "Windtree Park", "category": "park", "tags": ["park"], "sources": ["osm", "overture"], "address": "9117 121st Ave SE", "hours": "07:00-dusk"}, "geometry": {"type": "Point", "coordinates": [-122.1798855, 47.5203884]}}]}
