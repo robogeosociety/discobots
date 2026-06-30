@@ -24,6 +24,7 @@ Two things live here:
 | **github** | every 30 min | New GitHub activity for `tommyroar` → Discord |
 | **watcher** | daemon | Watches the dev-status server, posts on service up/down changes |
 | **transit** | every 5 min | OneBusAway **GTFS-Realtime** alerts for watched routes → transit channel |
+| **skills** | every 3 h + daily spotlight | New Claude Code skills the fleet gains → `#skills`, plus a daily 💡 spotlight on an existing one |
 
 Each is a long-running container (`--restart unless-stopped`): the periodic bots run their
 schedule internally via supercronic, watcher runs a poll loop. Secrets are injected at
@@ -36,7 +37,7 @@ Per-bot details, image layout, and the secret sources are in [`ops/README.md`](.
 MacBook Air (control plane)            Mac mini (runtime, always-on)
   discobots/ (git source of truth)         OrbStack engine (auto-starts at login)
   just deploy ── push ─► GitHub ─ pull ─►  /Volumes/dev/discobots ─ docker build ─► images
-  just up / ps / logs / down ── ssh ─────► containers: discobot-{digest,github,watcher,transit}
+  just up / ps / logs / down ── ssh ─────► containers: discobot-{digest,github,watcher,transit,skills}
 ```
 
 tommybot (the MLX Obsidian-RAG bot) deliberately stays a `raw_exec` Nomad job on the host —
@@ -51,7 +52,7 @@ no setup step**:
 
 ```sh
 just deploy        # git push, then git pull + rebuild images on the mini
-just up            # start all four bots   (just up transit  → just one)
+just up            # start all five bots   (just up transit  → just one)
 just ps            # list the discobot containers + status
 just logs github   # tail a bot's logs     (add -f to follow)
 just run-now digest   # fire a periodic bot once now

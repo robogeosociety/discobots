@@ -12,15 +12,24 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **github** | `discobot-github` | every 30 min | GitHub (`gh api`), Discord | `gh auth token` + `grafana/.env` webhook |
 | **watcher** | `discobot-watcher` | daemon (poll loop) | dev-status `:8077`, Discord | `grafana/.env` webhook |
 | **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
+| **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
 
 A container reaches the mini's localhost services (InfluxDB, dev-status) via
 `host.docker.internal`; `run.sh` rewrites `localhost`/`127.0.0.1` URLs accordingly.
+
+**skills** is the odd one out: it reads files, not a network service. It enumerates the
+fleet's shared Claude Code skills — the global `~/.claude/skills/*` plus installed-plugin
+skills (`~/.claude/plugins/cache/.../skills/*`) — mounted **read-only** from the host (both
+live under `$HOME`, which OrbStack mounts fine; `/Volumes/*` it can't). It posts each
+**🆕 new** skill to `#skills` once, and a daily **💡 spotlight** rotates through existing
+ones. New-ness is keyed on a version-independent skill id (state in volume
+`discobot-skills-state`), so a plugin version bump never re-announces a skill.
 
 ## Layout
 
 ```
 ops/
-  digest.py  github_discord.py  transit_discord.py  watcher.py   # the bots
+  digest.py  github_discord.py  transit_discord.py  watcher.py  skills_discord.py   # the bots
   docker/
     base.Dockerfile             # shared python+supercronic, carries all scripts
     <bot>/Dockerfile + crontab  # per-bot image; periodic bots run supercronic
@@ -37,18 +46,20 @@ there's no setup step.
 
 ```sh
 just deploy           # git push, then git pull + build images on the mini
-just up               # start all bots: digest, github, watcher, transit
+just up               # start all bots: digest, github, watcher, transit, skills
 just ps               # list discobot containers + status
 just doctor           # confirm the mini's engine is reachable from the Air
 just logs github -f   # follow a bot's logs
 just run-now digest   # fire a periodic bot once (posts to Discord)
 just dry digest       # fire once in dry-run (no post)
 just down [bot...]    # stop/remove containers
+just spotlight        # fire the skills bot's 💡 spotlight once now
 ```
 
-All four bots start by default. `transit` reads OneBusAway's GTFS-Realtime alerts feed
+All five bots start by default. `transit` reads OneBusAway's GTFS-Realtime alerts feed
 (`/api/gtfs_realtime/alerts-for-agency/<id>.pb`) and posts watched-route alerts to the transit
-channel.
+channel. `skills` watches the fleet's Claude Code skills and posts new/spotlighted ones to
+`#skills` (see the bots table above).
 
 ## Notes
 
@@ -58,6 +69,9 @@ channel.
   on the always-on mini, so bots return after a reboot.
 - `github`'s seen-event state lives in the named volume `discobot-github-state` (so it doesn't
   re-post history when the container is recreated).
+- `skills` keeps its known-skills state in `discobot-skills-state`; on a **fresh** volume the
+  first run seeds the inventory silently and posts a single intro embed instead of announcing
+  every pre-existing skill as new. `just dry skills` / `just spotlight` preview without writing.
 
 ## Obsidian link redirector (`/o`)
 

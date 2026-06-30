@@ -1,0 +1,5 @@
+# Skills → Discord #skills.  TZ comes from the container env (run.sh sets it).
+# Check for newly-gained skills every 3 hours; announce any to the channel.
+0 */3 * * * python /app/skills_discord.py
+# Once a day, spotlight one existing skill — the "mention old skills occasionally" half.
+30 9 * * * python /app/skills_discord.py --spotlight

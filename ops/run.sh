@@ -99,14 +99,37 @@ start_transit() {
   echo "started discobot-transit (every 5 min)"
 }
 
+start_skills() {
+  # Announces the fleet's Claude Code skills to #skills (DISCORD_WEBHOOK_SKILLS,
+  # falling back to the general webhook). Reads the skill inventory from the
+  # host's ~/.claude/{skills,plugins} mounted read-only — both are under $HOME,
+  # which OrbStack mounts fine (unlike /Volumes/*). State (known skills) lives in
+  # the named volume discobot-skills-state.
+  local webhook
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_SKILLS)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  [ -n "$webhook" ] || { echo "skills: no DISCORD_WEBHOOK_SKILLS/URL in grafana/.env" >&2; return 1; }
+  [ -d "$HOME/.claude/skills" ] || { echo "skills: $HOME/.claude/skills not found on host" >&2; return 1; }
+  docker rm -f discobot-skills >/dev/null 2>&1 || true
+  docker run -d --name discobot-skills "${common_run[@]}" \
+    -e "DISCORD_WEBHOOK_URL=$webhook" \
+    -e "SKILLS_GLOBAL_DIR=/claude/skills" -e "SKILLS_PLUGINS_DIR=/claude/plugins" \
+    -v "$HOME/.claude/skills:/claude/skills:ro" \
+    -v "$HOME/.claude/plugins:/claude/plugins:ro" \
+    -v discobot-skills-state:/root/.local/share/skills-discord \
+    discobot-skills:latest >/dev/null
+  echo "started discobot-skills (new-skill check every 3h + daily spotlight; state in volume discobot-skills-state)"
+}
+
 bots=("$@")
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit)
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills)
 for b in "${bots[@]}"; do
   case "$b" in
     digest)  start_digest ;;
     github)  start_github ;;
     watcher) start_watcher ;;
     transit) start_transit ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit)" >&2; exit 2 ;;
+    skills)  start_skills ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills)" >&2; exit 2 ;;
   esac
 done

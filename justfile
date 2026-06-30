@@ -10,7 +10,7 @@
 # Start / stop bots:                   just up           |  just down
 # Logs / status / manual fire:         just logs github  |  just ps  |  just run-now digest
 #
-# Bots: digest (weekly), github (30m), watcher (daemon), transit (disabled).
+# Bots: digest (weekly), github (30m), watcher (daemon), transit (5m), skills (3h + daily spotlight).
 
 mini_host := "tommydoerr@tommys-mac-mini.tail59a169.ts.net"
 mini_repo := "/Volumes/dev/discobots"
@@ -37,11 +37,11 @@ build:
 up *bots:
     ssh {{mini_host}} 'cd {{mini_repo}} && ops/run.sh {{bots}}'
 
-# Stop + remove a bot's container (default: all four).
+# Stop + remove a bot's container (default: all of them).
 down *bots:
     #!/usr/bin/env bash
     set -euo pipefail
-    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher transit"
+    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher transit skills"
     cmds=""; for b in $names; do cmds="$cmds docker rm -f discobot-$b;"; done
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; $cmds" || true
 
@@ -65,9 +65,14 @@ run-now bot:
     set -euo pipefail
     case "{{bot}}" in
       digest) s=digest.py;; github) s=github_discord.py;; transit) s=transit_discord.py;;
+      skills) s=skills_discord.py;;
       watcher) echo "watcher is a daemon — use \`just logs watcher\`" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s"
+
+# Fire the skills bot's daily 💡 spotlight once now (posts an existing skill).
+spotlight:
+    ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-skills python /app/skills_discord.py --spotlight"
 
 # Dry-run a periodic bot once (no Discord post) — handy after a deploy.
 # (Bots differ: digest uses --dry-run, github/transit use --dry.)
@@ -76,7 +81,7 @@ dry bot:
     set -euo pipefail
     case "{{bot}}" in
       digest) s=digest.py; f=--dry-run;; github) s=github_discord.py; f=--dry;;
-      transit) s=transit_discord.py; f=--dry;;
+      transit) s=transit_discord.py; f=--dry;; skills) s=skills_discord.py; f=--dry;;
       watcher) echo "watcher is a daemon — use \`just logs watcher\`" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s $f"
