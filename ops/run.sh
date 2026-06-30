@@ -29,9 +29,12 @@ docker info >/dev/null 2>&1 || {
 }
 
 # dotget <file> <KEY> — value of KEY in a KEY=VALUE dotenv (quotes stripped).
+# Trailing `|| true`: a missing key makes `grep` exit non-zero, which under `set -euo pipefail`
+# would abort the caller on a bare `x="$(dotget …)"` assignment BEFORE its fallback runs (this
+# bricked start_skills, whose DISCORD_WEBHOOK_SKILLS key isn't always present). Absent key → "".
 dotget() {
   grep -E "^$2=" "$1" 2>/dev/null | head -1 | cut -d= -f2- \
-    | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+    | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//" || true
 }
 # hostify — rewrite //localhost or //127.0.0.1 to //host.docker.internal.
 hostify() { sed -e "s#//localhost#//$HOSTGW#g" -e "s#//127\.0\.0\.1#//$HOSTGW#g"; }
