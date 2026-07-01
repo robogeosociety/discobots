@@ -6,8 +6,8 @@
 # host.docker.internal, and `docker run`s each bot with --restart unless-stopped.
 # Re-running a bot recreates its container (picks up rotated secrets/new image).
 #
-#   ops/run.sh                  # start all bots: digest, github, watcher, transit
-#   ops/run.sh digest           # just one
+#   ops/run.sh                  # start all bots: digest, github, watcher, transit, skills, dashboard
+#   ops/run.sh dashboard        # just one
 #
 # Secret sources (host-side, unchanged from the old Nomad wrappers):
 #   grafana/.env   DISCORD_WEBHOOK_URL                       (all bots)
@@ -124,15 +124,35 @@ start_skills() {
   echo "started discobot-skills (new-skill check every 3h + daily spotlight; state in volume discobot-skills-state)"
 }
 
+start_dashboard() {
+  # The #ops dynamic dashboard: one message edited in place on each dev-status
+  # poll (no reposts). Prefers a dedicated DISCORD_WEBHOOK_OPS, falling back to
+  # the general webhook (same channel the watcher posts to). The message id +
+  # content signature persist in the named volume discobot-dashboard-state so a
+  # restart reconciles the existing message instead of double-posting.
+  local webhook
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_OPS)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  [ -n "$webhook" ] || { echo "dashboard: no DISCORD_WEBHOOK_OPS/URL in grafana/.env" >&2; return 1; }
+  docker rm -f discobot-dashboard >/dev/null 2>&1 || true
+  docker run -d --name discobot-dashboard "${common_run[@]}" \
+    -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
+    -e "DISCORD_WEBHOOK_URL=$webhook" \
+    -v discobot-dashboard-state:/state \
+    discobot-dashboard:latest >/dev/null
+  echo "started discobot-dashboard (daemon; edits one #ops message in place; state in volume discobot-dashboard-state)"
+}
+
 bots=("$@")
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills)
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills dashboard)
 for b in "${bots[@]}"; do
   case "$b" in
-    digest)  start_digest ;;
-    github)  start_github ;;
-    watcher) start_watcher ;;
-    transit) start_transit ;;
-    skills)  start_skills ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills)" >&2; exit 2 ;;
+    digest)    start_digest ;;
+    github)    start_github ;;
+    watcher)   start_watcher ;;
+    transit)   start_transit ;;
+    skills)    start_skills ;;
+    dashboard) start_dashboard ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills|dashboard)" >&2; exit 2 ;;
   esac
 done

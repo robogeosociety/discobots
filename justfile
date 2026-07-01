@@ -10,7 +10,8 @@
 # Start / stop bots:                   just up           |  just down
 # Logs / status / manual fire:         just logs github  |  just ps  |  just run-now digest
 #
-# Bots: digest (weekly), github (30m), watcher (daemon), transit (5m), skills (3h + daily spotlight).
+# Bots: digest (weekly), github (30m), watcher (daemon), transit (5m),
+#       skills (3h + daily spotlight), dashboard (daemon — one live #ops message).
 
 mini_host := "tommydoerr@tommys-mac-mini.tail59a169.ts.net"
 mini_repo := "/Volumes/dev/discobots"
@@ -41,7 +42,7 @@ up *bots:
 down *bots:
     #!/usr/bin/env bash
     set -euo pipefail
-    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher transit skills"
+    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher transit skills dashboard"
     cmds=""; for b in $names; do cmds="$cmds docker rm -f discobot-$b;"; done
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; $cmds" || true
 
@@ -76,7 +77,7 @@ run-now bot:
     case "{{bot}}" in
       digest) s=digest.py;; github) s=github_discord.py;; transit) s=transit_discord.py;;
       skills) s=skills_discord.py;;
-      watcher) echo "watcher is a daemon — use \`just logs watcher\`" >&2; exit 2;;
+      watcher|dashboard) echo "{{bot}} is a daemon — use \`just logs {{bot}}\` (or \`just dry dashboard\` to preview)" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s"
 
@@ -92,6 +93,7 @@ dry bot:
     case "{{bot}}" in
       digest) s=digest.py; f=--dry-run;; github) s=github_discord.py; f=--dry;;
       transit) s=transit_discord.py; f=--dry;; skills) s=skills_discord.py; f=--dry;;
+      dashboard) s=ops_dashboard.py; f="--dry --demo";;
       watcher) echo "watcher is a daemon — use \`just logs watcher\`" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s $f"
