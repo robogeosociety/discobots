@@ -12,9 +12,9 @@ Three things live here:
 1. **The registry** ([`DISCORD.md`](./DISCORD.md)) — the map of every Discord app/bot/webhook
    across Tommy's machines and which repo/`.env` owns each. Tokens stay where their service
    reads them; nothing secret is committed.
-2. **The discobots themselves** ([`ops/`](./ops/)) — the notification/automation bots, each
-   running as its **own OrbStack container on the always-on Mac mini**, built on the mini and
-   **deployed + managed remotely from the MacBook Air**.
+2. **The discobots themselves** ([`ops/`](./ops/)) — the notification bots and the live
+   `discokit` dashboards, each running as its **own OrbStack container on the always-on Mac
+   mini**, built on the mini and **deployed + managed remotely from the MacBook Air**.
 3. **MCP servers** ([`mcp/`](./mcp/)) — local (stdio) MCP servers any Claude Code discobot
    channel can load, registered in the mini's `~/.claude.json`. See
    [`DISCORD.md`](./DISCORD.md#mcp-servers-loaded-by-claude-discobot-channels) for the registry
@@ -29,11 +29,16 @@ Three things live here:
 | **watcher** | daemon | Watches the dev-status server, posts on service up/down changes |
 | **transit** | every 5 min | OneBusAway **GTFS-Realtime** alerts for watched routes → transit channel |
 | **skills** | every 3 h + daily spotlight | New Claude Code skills the fleet gains → `#skills`, plus a daily 💡 spotlight on an existing one |
+| **dashboard** | daemon (30 s poll) | Dynamic **#ops** status board — dev-status readout, one message edited in place |
+| **loop** | daemon (60 s poll) | The `obsidian-automations` supervisor loop as a spinning ASCII ferris wheel → **#ops** |
+| **embed** | daemon (5 min poll) | tommybot's slow embeddings-sync progress, graphed → **#ops** |
 
 Each is a long-running container (`--restart unless-stopped`): the periodic bots run their
-schedule internally via supercronic, watcher runs a poll loop. Secrets are injected at
-`docker run` from the host's existing `.env` files — never baked into an image or this repo.
-Per-bot details, image layout, and the secret sources are in [`ops/README.md`](./ops/README.md).
+schedule internally via supercronic, the daemons (`watcher`/`dashboard`/`loop`/`embed`) run a
+poll loop. Secrets are injected at `docker run` from the host's existing `.env` files — never
+baked into an image or this repo. Per-bot details, image layout, and secret sources are in
+[`ops/README.md`](./ops/README.md); `loop` and `embed` (the `discokit` dashboards) get a full
+tour with real rendered output in [`docs/ops.md`](./docs/ops.md).
 
 ## Architecture
 
@@ -41,7 +46,7 @@ Per-bot details, image layout, and the secret sources are in [`ops/README.md`](.
 MacBook Air (control plane)            Mac mini (runtime, always-on)
   discobots/ (git source of truth)         OrbStack engine (auto-starts at login)
   just deploy ── push ─► GitHub ─ pull ─►  /Volumes/dev/discobots ─ docker build ─► images
-  just up / ps / logs / down ── ssh ─────► containers: discobot-{digest,github,watcher,transit,skills}
+  just up / ps / logs / down ── ssh ─────► containers: discobot-{digest,github,watcher,transit,skills,dashboard,loop,embed}
 ```
 
 tommybot (the MLX Obsidian-RAG bot) deliberately stays a `raw_exec` Nomad job on the host —
@@ -56,7 +61,7 @@ no setup step**:
 
 ```sh
 just deploy        # git push, then git pull + rebuild images on the mini
-just up            # start all five bots   (just up transit  → just one)
+just up            # start all eight bots  (just up transit  → just one)
 just ps            # list the discobot containers + status
 just logs github   # tail a bot's logs     (add -f to follow)
 just run-now digest   # fire a periodic bot once now
