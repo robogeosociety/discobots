@@ -1,0 +1,17 @@
+# Regenerable / large artifacts — never committed (see README "Rebuild").
+cache/                 # walkshot PNGs + the bge geo index (~170 MB)
+vendor/                # pip --target deps: numpy, fastembed/onnxruntime, gtfs-realtime-bindings (~180 MB)
+node_modules/          # playwright (chromium pulled to the OS cache)
+out/                   # transient renders (map.png/.jpg, board.html)
+__pycache__/
+*.pyc
+
+# Vendored walksheds dataset snapshot (regenerate per walksheds-data/SNAPSHOT.md); keep only the manifest.
+walksheds-data/*
+!walksheds-data/SNAPSHOT.md
+
+# Local state / secrets — these live in the mini's channel state dir, not here.
+*.bak
+.env
+access.json
+chat_id
