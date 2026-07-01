@@ -49,9 +49,9 @@ MacBook Air (control plane)            Mac mini (runtime, always-on)
   just up / ps / logs / down ── ssh ─────► containers: discobot-{digest,github,watcher,transit,skills,dashboard,loop,embed}
 ```
 
-tommybot (the MLX Obsidian-RAG bot) deliberately stays a `raw_exec` Nomad job on the host —
-MLX needs Apple Metal, which a Linux container can't reach. Only the network-bound
-automations are containerized here.
+tommybot (the MLX Obsidian-RAG bot) deliberately stays a bare-metal `launchd` process on the
+host (`com.tommybot.bot-mini`, on the mini since 2026-07-01) — MLX needs Apple Metal, which a
+Linux container can't reach. Only the network-bound automations are containerized here.
 
 ## Operating it (from the Air)
 
