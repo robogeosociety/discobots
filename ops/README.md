@@ -13,6 +13,7 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **watcher** | `discobot-watcher` | daemon (poll loop) | dev-status `:8077`, Discord | `grafana/.env` webhook |
 | **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
+| **dashboard** | `discobot-dashboard` | daemon (poll loop, 30 s) | dev-status `:8077`, Discord | `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
 
 A container reaches the mini's localhost services (InfluxDB, dev-status) via
 `host.docker.internal`; `run.sh` rewrites `localhost`/`127.0.0.1` URLs accordingly.
@@ -25,13 +26,23 @@ live under `$HOME`, which OrbStack mounts fine; `/Volumes/*` it can't). It posts
 ones. New-ness is keyed on a version-independent skill id (state in volume
 `discobot-skills-state`), so a plugin version bump never re-announces a skill.
 
+**dashboard** is the *dynamic dashboard*: instead of posting a new message per poll, it posts
+**one** message and PATCH-edits it in place on each dev-status poll — down-first, colour +
+glyph by status, with an `updated <t:…:R>` stamp that self-refreshes client-side (so unchanged
+polls make no edit at all). If dev-status goes unreachable it edits the message to a degraded
+"showing last known state" rather than going silent. The message id + content signature persist
+in the volume `discobot-dashboard-state`, so a restart reconciles the existing message instead
+of double-posting. It's the first consumer of **`discokit`**, the shared design-language kit.
+
 ## Layout
 
 ```
 ops/
-  digest.py  github_discord.py  transit_discord.py  watcher.py  skills_discord.py   # the bots
+  digest.py  github_discord.py  transit_discord.py  watcher.py  skills_discord.py   # notifier bots
+  ops_dashboard.py              # the dynamic #ops dashboard (daemon), drives discokit
+  discokit/                     # shared kit: tokens · config · poster · dashboard
   docker/
-    base.Dockerfile             # shared python+supercronic, carries all scripts
+    base.Dockerfile             # shared python+supercronic, carries all scripts + discokit
     <bot>/Dockerfile + crontab  # per-bot image; periodic bots run supercronic
   build.sh                      # mini: build all images
   run.sh                        # mini: resolve secrets + docker run each bot
@@ -46,17 +57,18 @@ there's no setup step.
 
 ```sh
 just deploy           # git push, then git pull + build images on the mini
-just up               # start all bots: digest, github, watcher, transit, skills
+just up               # start all bots: digest, github, watcher, transit, skills, dashboard
 just ps               # list discobot containers + status
 just doctor           # confirm the mini's engine is reachable from the Air
 just logs github -f   # follow a bot's logs
 just run-now digest   # fire a periodic bot once (posts to Discord)
 just dry digest       # fire once in dry-run (no post)
+just dry dashboard    # preview the dashboard's edit-in-place sequence (no post)
 just down [bot...]    # stop/remove containers
 just spotlight        # fire the skills bot's 💡 spotlight once now
 ```
 
-All five bots start by default. `transit` reads OneBusAway's GTFS-Realtime alerts feed
+All six bots start by default. `transit` reads OneBusAway's GTFS-Realtime alerts feed
 (`/api/gtfs_realtime/alerts-for-agency/<id>.pb`) and posts watched-route alerts to the transit
 channel. `skills` watches the fleet's Claude Code skills and posts new/spotlighted ones to
 `#skills` (see the bots table above).
