@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -84,6 +85,22 @@ def _truncate(text: str, length: int = 200) -> str:
     if len(text) <= length:
         return text
     return text[: length - 1] + "…"
+
+
+def _format_duration(seconds: float) -> str:
+    """Human 'was active for' string, e.g. '2d 3h', '4h', '<1m'."""
+    seconds = max(0, int(seconds))
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    parts: list[str] = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes and not days:  # minutes only matter at sub-day resolution
+        parts.append(f"{minutes}m")
+    return " ".join(parts) if parts else "<1m"
 
 
 def _translated(ts) -> str:
@@ -245,14 +262,36 @@ def build_new_alert_embed(alert: dict) -> dict:
 
 
 def build_cleared_embed(alert_id: str, state_entry: dict) -> dict:
-    """Build a Discord embed for a resolved alert."""
+    """Build a Discord embed for a resolved alert.
+
+    Mirrors the richness of a new-alert embed (routes / effect / how long it was
+    active) instead of just a title. Every field is optional so entries persisted
+    before enrichment still render cleanly."""
     route_label = state_entry.get("route_label", "Transit")
     summary = state_entry.get("summary", "")
-    return {
+    embed: dict = {
         "title": f"Cleared — {route_label}",
         "description": summary if summary else "A previous service alert has been resolved.",
         "color": CLEARED_COLOR,
+        "fields": [],
     }
+    if state_entry.get("url"):
+        embed["url"] = state_entry["url"]
+    routes = state_entry.get("routes") or []
+    if routes:
+        embed["fields"].append({"name": "Affected Routes", "value": ", ".join(routes), "inline": True})
+    if state_entry.get("effect"):
+        embed["fields"].append(
+            {"name": "Was", "value": state_entry["effect"].replace("_", " ").title(), "inline": True}
+        )
+    first_seen = state_entry.get("first_seen")
+    if first_seen:
+        embed["fields"].append(
+            {"name": "Active for", "value": _format_duration(time.time() - first_seen), "inline": True}
+        )
+    # An embed timestamp renders as a relative "cleared just now" in Discord.
+    embed["timestamp"] = datetime.now(timezone.utc).isoformat()
+    return embed
 
 
 # ---------------------------------------------------------------------------
@@ -260,12 +299,16 @@ def build_cleared_embed(alert_id: str, state_entry: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _state_entry(alert: dict) -> dict:
+def _state_entry(alert: dict, first_seen: float | None = None) -> dict:
     routes = alert.get("routes") or []
     return {
-        "first_seen": time.time(),
+        "first_seen": first_seen if first_seen is not None else time.time(),
         "route_label": ", ".join(routes) if routes else "Transit",
         "summary": alert.get("header", ""),
+        # Persisted so the cleared embed can be as rich as the new-alert one.
+        "effect": alert.get("effect", ""),
+        "url": alert.get("url", ""),
+        "routes": routes,
     }
 
 
@@ -304,10 +347,13 @@ def run(dry: bool = False) -> None:
             entry = state.pop(alert_id, {})
             cleared_embeds.append(build_cleared_embed(alert_id, entry))
 
-        # Keep still-active alerts in state (preserve first_seen if already known)
+        # Refresh still-active alerts each run so the persisted fields stay current
+        # (backfilling enrichment onto pre-existing entries), preserving the original
+        # first_seen that powers the cleared embed's "Active for" duration.
         for alert_id in current_ids:
-            if alert_id not in state:
-                state[alert_id] = _state_entry(current_alerts[alert_id])
+            prev = state.get(alert_id)
+            first_seen = prev.get("first_seen") if isinstance(prev, dict) else None
+            state[alert_id] = _state_entry(current_alerts[alert_id], first_seen=first_seen)
 
         all_embeds = new_embeds + cleared_embeds
 
