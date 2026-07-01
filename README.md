@@ -7,7 +7,7 @@ serves which purpose and where each config lives. No secrets are committed here.
 
 ## What this is
 
-Two things live here:
+Three things live here:
 
 1. **The registry** ([`DISCORD.md`](./DISCORD.md)) — the map of every Discord app/bot/webhook
    across Tommy's machines and which repo/`.env` owns each. Tokens stay where their service
@@ -15,6 +15,10 @@ Two things live here:
 2. **The discobots themselves** ([`ops/`](./ops/)) — the notification/automation bots, each
    running as its **own OrbStack container on the always-on Mac mini**, built on the mini and
    **deployed + managed remotely from the MacBook Air**.
+3. **MCP servers** ([`mcp/`](./mcp/)) — local (stdio) MCP servers any Claude Code discobot
+   channel can load, registered in the mini's `~/.claude.json`. See
+   [`DISCORD.md`](./DISCORD.md#mcp-servers-loaded-by-claude-discobot-channels) for the registry
+   entry.
 
 ## The bots (`ops/`)
 
