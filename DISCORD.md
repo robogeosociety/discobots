@@ -31,6 +31,27 @@ committed here** — see `.gitignore`.
 | **`ops/`** (this repo) — `digest.py`, `github_discord.py`, `transit_discord.py`, `watcher.py`, `skills_discord.py`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env` (skills uses `DISCORD_WEBHOOK_SKILLS`); digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token`; skills reads host `~/.claude/{skills,plugins}` | `tommyroar/discobots` |
 | `~/dev/obsidian-automations/automations/discord_notify.py`, `enrichment_discord.py` | `DISCORD_BOT_TOKEN` (falls back to `tommybot/.env`), `DISCORD_WEBHOOK_URL*` | `tommyroar/obsidian-automations` |
 
+## MCP servers (loaded by Claude discobot channels)
+
+Local (stdio) MCP servers registered in the mini's top-level `~/.claude.json` →
+`mcpServers`, available to **any** Claude Code discobot channel session (the config is
+global to that `.claude.json`, not per-channel) — see the mini's own `AGENT.md` fleet
+table for which channel is which. Code lives here under `mcp/`; secrets, if any, follow
+this file's usual config-contract convention (values in `.env`, never committed) — but
+none of these currently need any.
+
+| Server | Code | Config | Reachable by |
+| --- | --- | --- | --- |
+| **`obsidian`** | `mcp/obsidian_mcp.py` (PEP 723 script, `uv run --script`) | `OBSIDIAN_URL` env var — defaults to `http://127.0.0.1:8788` (the Obsidian CLI HTTP wrapper, co-located on the mini). No token: the wrapper is tailnet/loopback-only, no auth. | Any discobot channel (registered globally in `~/.claude.json` on the mini) — the `discord-obsidian` channel is the natural primary consumer, but the surface is vault-selectable per call, not vault-bound. |
+
+`obsidian_mcp.py` is a thin, faithful client of the wrapper contract (5-vault enum —
+`home`/`dev`/`camping`/`gear`/`travel` — validated both client-side for fast-fail and
+server-side for real enforcement): `obsidian_read`, `obsidian_search`, `obsidian_files`,
+`obsidian_folders`, `obsidian_backlinks`, `obsidian_tags`, `obsidian_tasks`,
+`obsidian_properties`, `obsidian_daily`, plus the write ops `obsidian_append`,
+`obsidian_create`, `obsidian_set_property`. A wrapper 503 (mini's Obsidian not up) or a
+connection failure/timeout surfaces as a clean tool-result error string, never a crash.
+
 ## Where the discobots run (OrbStack on the mini, managed from the Air)
 
 The `ops/` automations run as **individual OrbStack containers on the always-on Mac mini**,
