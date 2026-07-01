@@ -33,16 +33,18 @@ committed here** — see `.gitignore`.
 
 ## MCP servers (loaded by Claude discobot channels)
 
-Local (stdio) MCP servers registered in the mini's top-level `~/.claude.json` →
-`mcpServers`, available to **any** Claude Code discobot channel session (the config is
-global to that `.claude.json`, not per-channel) — see the mini's own `AGENT.md` fleet
-table for which channel is which. Code lives here under `mcp/`; secrets, if any, follow
-this file's usual config-contract convention (values in `.env`, never committed) — but
-none of these currently need any.
+Local (stdio) MCP servers live in `~/.claude.json` on the mini, either **global**
+(top-level `mcpServers` — every Claude Code session on that host, any channel) or
+**project-scoped** (`projects["<workspace path>"].mcpServers` — only a session whose cwd
+is that exact path). Neither form is tracked in source: `~/.claude.json` is host-local,
+unversioned, same category as this file's `.env` secrets. This table records the
+contract; the mini's own `AGENT.md` fleet table has the channel-to-workspace mapping.
+Code lives here under `mcp/`; secrets, if any, follow this file's usual config-contract
+convention (values in `.env`, never committed) — but none of these currently need any.
 
 | Server | Code | Config | Reachable by |
 | --- | --- | --- | --- |
-| **`obsidian`** | `mcp/obsidian_mcp.py` (PEP 723 script, `uv run --script`) | `OBSIDIAN_URL` env var — defaults to `http://127.0.0.1:8788` (the Obsidian CLI HTTP wrapper, co-located on the mini). No token: the wrapper is tailnet/loopback-only, no auth. | Any discobot channel (registered globally in `~/.claude.json` on the mini) — the `discord-obsidian` channel is the natural primary consumer, but the surface is vault-selectable per call, not vault-bound. |
+| **`obsidian`** | `mcp/obsidian_mcp.py` (PEP 723 script, `uv run --script`) | `OBSIDIAN_URL` env var — defaults to `http://127.0.0.1:8788` (the Obsidian CLI HTTP wrapper, co-located on the mini). No token: the wrapper is tailnet/loopback-only, no auth. | **Project-scoped** to the `discord-obsidian` channel's workspace (`projects["~/.claude/channels/discord-obsidian/workspace"]` in `~/.claude.json`) — deliberately narrowed from an earlier global registration once `discord-obsidian` was confirmed the only consumer. Not available to other channels (ops/dev/camp/home/trips/maps) unless re-added to their own project entry (or promoted back to global). The tool surface itself is vault-selectable per call, not vault-bound. |
 
 `obsidian_mcp.py` is a thin, faithful client of the wrapper contract (5-vault enum —
 `home`/`dev`/`camping`/`gear`/`travel` — validated both client-side for fast-fail and
