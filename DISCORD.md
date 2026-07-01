@@ -22,7 +22,7 @@ committed here** — see `.gitignore`.
 
 | Location | Key(s) | Purpose | Repo |
 | --- | --- | --- | --- |
-| `~/dev/observability/grafana/.env` | `DISCORD_WEBHOOK_URL`, `DISCORD_WEBHOOK_TRANSIT`, `DISCORD_WEBHOOK_DIGEST`, `DISCORD_WEBHOOK_WEATHER`, `DISCORD_WEBHOOK_SKILLS`, `DISCORD_WEBHOOK_URL_*` | **Single source of truth** for all notification/alert webhooks. Deployed to `~/.observability/grafana/.env` for the container. | `tommyroar/observability-config` |
+| `~/dev/observability/grafana/.env` | `DISCORD_WEBHOOK_URL`, `DISCORD_WEBHOOK_TRANSIT`, `DISCORD_WEBHOOK_DIGEST`, `DISCORD_WEBHOOK_WEATHER`, `DISCORD_WEBHOOK_SKILLS`, `DISCORD_WEBHOOK_OPS`, `DISCORD_WEBHOOK_URL_*` | **Single source of truth** for all notification/alert webhooks. Deployed to `~/.observability/grafana/.env` for the container. `DISCORD_WEBHOOK_OPS` is the #ops webhook (the `dashboard` and `loop` bots use it, falling back to the general `DISCORD_WEBHOOK_URL` → #ops). | `tommyroar/observability-config` |
 
 ## Consumers (read the configs above)
 

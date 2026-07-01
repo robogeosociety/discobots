@@ -143,8 +143,32 @@ start_dashboard() {
   echo "started discobot-dashboard (daemon; edits one #ops message in place; state in volume discobot-dashboard-state)"
 }
 
+start_loop() {
+  # The supervisor-loop graph for #ops: one message edited in place every ~60s from the InfluxDB
+  # `supervisor_tick` telemetry (needs Influx read creds like digest AND a webhook like dashboard).
+  # Reuses the same webhook as the #ops dashboard — a dedicated DISCORD_WEBHOOK_OPS if present, else
+  # the general webhook (→ #ops). The message id + content signature persist in the named volume
+  # discobot-loop-state across restarts.
+  local url token org webhook
+  url="$(dotget "$ASKDASH_ENV" INFLUX_URL)"; url="${url:-http://localhost:8086}"
+  url="$(printf '%s' "$url" | hostify)"
+  token="$(dotget "$ASKDASH_ENV" INFLUX_READ_TOKEN)"
+  org="$(dotget "$ASKDASH_ENV" INFLUX_ORG)"; org="${org:-home}"
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_OPS)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  [ -n "$token" ]   || { echo "loop: INFLUX_READ_TOKEN missing in ask-dash/.env" >&2; return 1; }
+  [ -n "$webhook" ] || { echo "loop: no DISCORD_WEBHOOK_OPS/URL in grafana/.env" >&2; return 1; }
+  docker rm -f discobot-loop >/dev/null 2>&1 || true
+  docker run -d --name discobot-loop "${common_run[@]}" \
+    -e "INFLUXDB_URL=$url" -e "INFLUXDB_TOKEN=$token" -e "INFLUXDB_ORG=$org" \
+    -e "DISCORD_WEBHOOK_URL=$webhook" \
+    -v discobot-loop-state:/state \
+    discobot-loop:latest >/dev/null
+  echo "started discobot-loop (daemon; graphs the loop into one #ops message; state in volume discobot-loop-state)"
+}
+
 bots=("$@")
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills dashboard)
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills dashboard loop)
 for b in "${bots[@]}"; do
   case "$b" in
     digest)    start_digest ;;
@@ -153,6 +177,7 @@ for b in "${bots[@]}"; do
     transit)   start_transit ;;
     skills)    start_skills ;;
     dashboard) start_dashboard ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills|dashboard)" >&2; exit 2 ;;
+    loop)      start_loop ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills|dashboard|loop)" >&2; exit 2 ;;
   esac
 done

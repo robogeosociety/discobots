@@ -11,7 +11,8 @@
 # Logs / status / manual fire:         just logs github  |  just ps  |  just run-now digest
 #
 # Bots: digest (weekly), github (30m), watcher (daemon), transit (5m),
-#       skills (3h + daily spotlight), dashboard (daemon — one live #ops message).
+#       skills (3h + daily spotlight), dashboard (daemon — one live #ops message),
+#       loop (daemon — one live #ops supervisor-loop graph).
 
 mini_host := "tommydoerr@tommys-mac-mini.tail59a169.ts.net"
 mini_repo := "/Volumes/dev/discobots"
