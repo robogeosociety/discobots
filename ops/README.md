@@ -14,6 +14,7 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
 | **dashboard** | `discobot-dashboard` | daemon (poll loop, 30 s) | dev-status `:8077`, Discord | `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
+| **loop** | `discobot-loop` | daemon (poll loop, 60 s) | InfluxDB `:8086`, Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback, same as dashboard) |
 
 A container reaches the mini's localhost services (InfluxDB, dev-status) via
 `host.docker.internal`; `run.sh` rewrites `localhost`/`127.0.0.1` URLs accordingly.
@@ -34,12 +35,24 @@ polls make no edit at all). If dev-status goes unreachable it edits the message 
 in the volume `discobot-dashboard-state`, so a restart reconciles the existing message instead
 of double-posting. It's the first consumer of **`discokit`**, the shared design-language kit.
 
+**loop** is a second `discokit` dashboard that draws `obsidiand` (the asyncio + pydoit supervisor
+loop) as a **spinning ASCII ferris wheel** from its `supervisor_tick` telemetry in the InfluxDB `ops`
+bucket. The wheel turns one cabin per minute (so the live message visibly spins as the loop ticks);
+the lead cabin **◉ is the last tick** and a **✦ cabin is the last event**, both labeled with a relative
+timestamp, over a footer with the trigger split (cron / event / backstop) + fire count and a header
+with lag / shadow-mode health (ℹ️ healthy · ⚠️ lag spike · 🔴 stopped). It posts to **#ops** — the same
+webhook as the status dashboard, so the loop's health sits beside the service readout. Like the
+dashboard it edits **one** message in place (state in volume `discobot-loop-state`) and shows the
+last-known wheel if Influx is unreachable. `python3 ops/loop_dashboard.py --dry --demo` spins the
+whole sequence locally with no Influx/Discord/deps.
+
 ## Layout
 
 ```
 ops/
   digest.py  github_discord.py  transit_discord.py  watcher.py  skills_discord.py   # notifier bots
   ops_dashboard.py              # the dynamic #ops dashboard (daemon), drives discokit
+  loop_dashboard.py             # the #ops supervisor-loop ferris wheel (daemon), drives discokit
   discokit/                     # shared kit: tokens · config · poster · dashboard
   docker/
     base.Dockerfile             # shared python+supercronic, carries all scripts + discokit
