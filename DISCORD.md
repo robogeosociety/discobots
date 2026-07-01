@@ -76,6 +76,16 @@ Nomad job on the host (MLX needs Apple Metal — no GPU in a Linux container).
   record them in the table above.
 - **Secrets never enter this repo.** Store an `.env.example` (placeholder keys only) if a
   bot moves its code here; the real `.env` is git-ignored.
+- **Single-guild scope — the private `tommyroar` server, id `1480240435585618064`.** All
+  discobots automation is scoped to this one server; nothing here should ever act in a
+  server Tommy doesn't own. Today's `ops/*.py` bots are all one-way webhooks (pre-scoped to
+  one channel at creation — nothing to misdirect at runtime), so this is mostly forward
+  cover, but it's a hard rule for anything that *reads* Discord: a bot client, gateway
+  listener, or interaction handler receives events from *any* server it's been invited to,
+  tagged with a `guild_id` — that code **must** call `discokit.guard.assert_own_guild(...)`
+  (or `is_own_guild(...)`) before acting on an inbound event. See `ops/discokit/guard.py`.
+  (The guild id is not a secret — it's a public-ish identifier, safe to commit, unlike a
+  bot token or webhook URL.)
 - When you add/move a Discord bot, webhook, or integration, **update this README** so it
   stays the registry of record.
 
