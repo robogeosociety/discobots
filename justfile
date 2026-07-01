@@ -12,7 +12,8 @@
 #
 # Bots: digest (weekly), github (30m), watcher (daemon), transit (5m),
 #       skills (3h + daily spotlight), dashboard (daemon — one live #ops message),
-#       loop (daemon — one live #ops supervisor-loop graph).
+#       loop (daemon — one live #ops supervisor-loop graph),
+#       embed (daemon — one live #ops embeddings-sync graph).
 
 mini_host := "tommydoerr@tommys-mac-mini.tail59a169.ts.net"
 mini_repo := "/Volumes/dev/discobots"
@@ -43,7 +44,7 @@ up *bots:
 down *bots:
     #!/usr/bin/env bash
     set -euo pipefail
-    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher transit skills dashboard"
+    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher transit skills dashboard loop embed"
     cmds=""; for b in $names; do cmds="$cmds docker rm -f discobot-$b;"; done
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; $cmds" || true
 
@@ -78,7 +79,7 @@ run-now bot:
     case "{{bot}}" in
       digest) s=digest.py;; github) s=github_discord.py;; transit) s=transit_discord.py;;
       skills) s=skills_discord.py;;
-      watcher|dashboard) echo "{{bot}} is a daemon — use \`just logs {{bot}}\` (or \`just dry dashboard\` to preview)" >&2; exit 2;;
+      watcher|dashboard|loop|embed) echo "{{bot}} is a daemon — use \`just logs {{bot}}\` (or \`just dry {{bot}}\` to preview)" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s"
 
@@ -95,6 +96,8 @@ dry bot:
       digest) s=digest.py; f=--dry-run;; github) s=github_discord.py; f=--dry;;
       transit) s=transit_discord.py; f=--dry;; skills) s=skills_discord.py; f=--dry;;
       dashboard) s=ops_dashboard.py; f="--dry --demo";;
+      loop) s=loop_dashboard.py; f="--dry --demo";;
+      embed) s=embed_dashboard.py; f="--dry --demo";;
       watcher) echo "watcher is a daemon — use \`just logs watcher\`" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s $f"

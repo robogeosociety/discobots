@@ -167,8 +167,29 @@ start_loop() {
   echo "started discobot-loop (daemon; graphs the loop into one #ops message; state in volume discobot-loop-state)"
 }
 
+start_embed() {
+  # tommybot's embeddings sync graph for #ops: one message edited in place every ~5min from the
+  # embeddings DB directly — no Influx (the trickle session itself emits no telemetry), just a
+  # read-only mount of ~/Library/Caches/tommybot (under $HOME, so OrbStack mounts it fine). Reuses
+  # the #ops webhook, like loop/dashboard. Growth history + the message id persist in the named
+  # volume discobot-embed-state.
+  local webhook cache_dir
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_OPS)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  [ -n "$webhook" ] || { echo "embed: no DISCORD_WEBHOOK_OPS/URL in grafana/.env" >&2; return 1; }
+  cache_dir="$HOME/Library/Caches/tommybot"
+  [ -d "$cache_dir" ] || { echo "embed: $cache_dir not found on host" >&2; return 1; }
+  docker rm -f discobot-embed >/dev/null 2>&1 || true
+  docker run -d --name discobot-embed "${common_run[@]}" \
+    -e "DISCORD_WEBHOOK_URL=$webhook" \
+    -v "$cache_dir:/mnt/tommybot-cache:ro" \
+    -v discobot-embed-state:/state \
+    discobot-embed:latest >/dev/null
+  echo "started discobot-embed (daemon; graphs tommybot's embeddings sync into one #ops message; state in volume discobot-embed-state)"
+}
+
 bots=("$@")
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills dashboard loop)
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills dashboard loop embed)
 for b in "${bots[@]}"; do
   case "$b" in
     digest)    start_digest ;;
@@ -178,6 +199,7 @@ for b in "${bots[@]}"; do
     skills)    start_skills ;;
     dashboard) start_dashboard ;;
     loop)      start_loop ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills|dashboard|loop)" >&2; exit 2 ;;
+    embed)     start_embed ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills|dashboard|loop|embed)" >&2; exit 2 ;;
   esac
 done
