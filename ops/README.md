@@ -15,6 +15,7 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
 | **dashboard** | `discobot-dashboard` | daemon (poll loop, 30 s) | dev-status `:8077`, Discord | `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
 | **loop** | `discobot-loop` | daemon (poll loop, 60 s) | InfluxDB `:8086`, Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback, same as dashboard) |
+| **embed** | `discobot-embed` | daemon (poll loop, 5 min) | host `~/Library/Caches/tommybot` (ro mount), Discord | `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback, same as dashboard/loop) — no Influx creds needed |
 
 A container reaches the mini's localhost services (InfluxDB, dev-status) via
 `host.docker.internal`; `run.sh` rewrites `localhost`/`127.0.0.1` URLs accordingly.
@@ -46,6 +47,19 @@ dashboard it edits **one** message in place (state in volume `discobot-loop-stat
 last-known wheel if Influx is unreachable. `python3 ops/loop_dashboard.py --dry --demo` spins the
 whole sequence locally with no Influx/Discord/deps.
 
+**embed** graphs tommybot's **embeddings sync** — the deliberately slow, min-RAM `*/15` trickle
+(tommybot#57) that replaced the OOM-prone once-daily whole-corpus embed. It reads the embeddings DB
+**directly** (a read-only mount of `~/Library/Caches/tommybot`, opened `immutable=1` so it never
+contends with the live WAL-mode writer) — no InfluxDB, since the trickle session itself emits no
+telemetry. Shows a **growth sparkline** of total embedded chunks (self-tracked across polls, in its
+own history file, so the slow climb is visible even though nothing else records it over time), a
+**per-vault** bar breakdown (an untouched vault renders as an empty bar — the visible sign the
+trickle hasn't reached it yet), the **last sync** (timestamp + embedded/changed/rolled counts,
+labeled like the loop wheel's last-tick), the embed model, and staleness (🔴 DB unreachable · ⚠️ no
+sync in 30 min — the trickle likely isn't landing · ℹ️ healthy). Posts to **#ops** (same webhook as
+dashboard/loop). `python3 ops/embed_dashboard.py --dry --demo` replays a seeding-to-recovered
+sequence locally with no DB/Discord/deps.
+
 ## Layout
 
 ```
@@ -53,6 +67,7 @@ ops/
   digest.py  github_discord.py  transit_discord.py  watcher.py  skills_discord.py   # notifier bots
   ops_dashboard.py              # the dynamic #ops dashboard (daemon), drives discokit
   loop_dashboard.py             # the #ops supervisor-loop ferris wheel (daemon), drives discokit
+  embed_dashboard.py            # the #ops embeddings-sync graph (daemon), drives discokit
   discokit/                     # shared kit: tokens · config · poster · dashboard
   docker/
     base.Dockerfile             # shared python+supercronic, carries all scripts + discokit
