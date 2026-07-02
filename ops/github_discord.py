@@ -7,6 +7,7 @@ Designed to run on a launchd schedule alongside gh-board-sync.
 """
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,7 +21,12 @@ from discokit.notify import ChangeFeed, StateFile  # noqa: E402
 from discokit.poster import Poster  # noqa: E402
 
 GITHUB_USER = "tommyroar"
-STATE_FILE = Path.home() / ".local" / "share" / "github-discord" / "state.json"
+# Env-overridable so the supervisor (fleet-hosting F1) can point state at its
+# own state dir instead of the container volume / ~/.local/share default.
+STATE_FILE = (
+    Path(os.environ.get("GITHUB_STATE_DIR", str(Path.home() / ".local" / "share" / "github-discord")))
+    / "state.json"
+)
 
 # Palette mapping: merged = the merge purple, opened = healthy, CI fail =
 # critical, deploy = informational.

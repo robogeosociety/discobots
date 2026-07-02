@@ -11,9 +11,10 @@ Layers:
     poster     batched notify POST, execute (?wait=true), PATCH-edit, 429 back-off
     notify     StateFile (durable JSON) + ChangeFeed (announce each id once)
     dashboard  Dashboard.tick(): upsert once, diff, edit-in-place, <t:R> stamp
+    live       the asyncio inner loop — many recurring Jobs, one process
     guard      the private-guild allowlist any Discord-*reading* code must honor
 """
 
-from . import config, dashboard, guard, notify, poster, tokens  # noqa: F401
+from . import config, dashboard, guard, live, notify, poster, tokens  # noqa: F401
 
-__all__ = ["tokens", "config", "notify", "poster", "dashboard", "guard"]
+__all__ = ["tokens", "config", "notify", "poster", "dashboard", "live", "guard"]

@@ -124,6 +124,40 @@ start_skills() {
   echo "started discobot-skills (new-skill check every 3h + daily spotlight; state in volume discobot-skills-state)"
 }
 
+start_live() {
+  # The discobots inner loop: all three #ops dashboards (dashboard/loop/embed)
+  # in ONE container — one asyncio loop (discokit.live), three Jobs on their own
+  # cadences. Env/mounts are the union of the three daemons' contracts, and the
+  # three existing state volumes are ADOPTED at distinct paths so the service
+  # keeps editing the same three Discord messages (no reposts on cutover).
+  # Rollback: `ops/run.sh dashboard loop embed` (after `docker rm -f discobot-live`).
+  local url token org webhook cache_dir
+  url="$(dotget "$ASKDASH_ENV" INFLUX_URL)"; url="${url:-http://localhost:8086}"
+  url="$(printf '%s' "$url" | hostify)"
+  token="$(dotget "$ASKDASH_ENV" INFLUX_READ_TOKEN)"
+  org="$(dotget "$ASKDASH_ENV" INFLUX_ORG)"; org="${org:-home}"
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_OPS)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  cache_dir="$HOME/Library/Caches/tommybot"
+  [ -n "$token" ]     || { echo "live: INFLUX_READ_TOKEN missing in ask-dash/.env" >&2; return 1; }
+  [ -n "$webhook" ]   || { echo "live: no DISCORD_WEBHOOK_OPS/URL in grafana/.env" >&2; return 1; }
+  [ -d "$cache_dir" ] || { echo "live: $cache_dir not found on host" >&2; return 1; }
+  docker rm -f discobot-live >/dev/null 2>&1 || true
+  docker run -d --name discobot-live "${common_run[@]}" \
+    -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
+    -e "INFLUXDB_URL=$url" -e "INFLUXDB_TOKEN=$token" -e "INFLUXDB_ORG=$org" \
+    -e "DISCORD_WEBHOOK_URL=$webhook" \
+    -e "OPS_DASH_STATE=/state/dashboard/ops.json" \
+    -e "LOOP_DASH_STATE=/state/loop/loop.json" \
+    -e "EMBED_DASH_STATE=/state/embed/embed.json" \
+    -v discobot-dashboard-state:/state/dashboard \
+    -v discobot-loop-state:/state/loop \
+    -v discobot-embed-state:/state/embed \
+    -v "$cache_dir:/mnt/tommybot-cache:ro" \
+    discobot-live:latest >/dev/null
+  echo "started discobot-live (inner loop; edits the three #ops messages in place; adopts the dashboard/loop/embed state volumes)"
+}
+
 start_dashboard() {
   # The #ops dynamic dashboard: one message edited in place on each dev-status
   # poll (no reposts). Prefers a dedicated DISCORD_WEBHOOK_OPS, falling back to
@@ -189,7 +223,9 @@ start_embed() {
 }
 
 bots=("$@")
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills dashboard loop embed)
+# Default set: `live` replaces the three standalone dashboard daemons
+# (dashboard/loop/embed) — those remain start-able by name for rollback.
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills live)
 for b in "${bots[@]}"; do
   case "$b" in
     digest)    start_digest ;;
@@ -197,6 +233,7 @@ for b in "${bots[@]}"; do
     watcher)   start_watcher ;;
     transit)   start_transit ;;
     skills)    start_skills ;;
+    live)      start_live ;;
     dashboard) start_dashboard ;;
     loop)      start_loop ;;
     embed)     start_embed ;;

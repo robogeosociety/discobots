@@ -30,6 +30,7 @@ sys.path.insert(0, str(_OPS))
 
 from discokit import config, tokens  # noqa: E402
 from discokit.dashboard import Dashboard  # noqa: E402
+from discokit.live import Job  # noqa: E402
 from discokit.poster import Poster  # noqa: E402
 
 
@@ -86,6 +87,29 @@ DEMO_SEQUENCE: list[dict[str, bool] | None] = [
 DEMO_CAPTION = ["all up", "no change", "api down", "unreachable", "recovered"]
 
 
+# --- the job (shared by the standalone daemon and live_service's inner loop) --
+def make_job(
+    url: str | None,
+    *,
+    dry: bool = False,
+    state: str,
+    interval: float = 30,
+    dev_status_url: str = "http://localhost:8077",
+) -> Job:
+    """One dev-status tick as a live.Job — poll, rebuild the panel, reconcile."""
+    dash = Dashboard(Poster(url, dry=dry), state_path=state, key="ops", source="ops-dashboard")
+    last_good: dict[str, bool] = {}
+
+    def tick() -> str:
+        nonlocal last_good
+        snapshot = fetch_live(dev_status_url)
+        if snapshot is not None:
+            last_good = snapshot
+        return dash.tick(build_panel(snapshot, last_good))
+
+    return Job("ops", interval, tick)
+
+
 # --- loop -------------------------------------------------------------------
 def main() -> None:
     ap = argparse.ArgumentParser(description="the #ops dynamic dashboard (discokit spike)")
@@ -103,18 +127,14 @@ def main() -> None:
         print("[ops_dashboard] no DISCORD_WEBHOOK_OPS / DISCORD_WEBHOOK_URL found", file=sys.stderr)
         sys.exit(1)
 
-    dash = Dashboard(
-        Poster(url, dry=args.dry),
-        state_path=args.state,
-        key="ops",
-        source="ops-dashboard",
-    )
-    last_good: dict[str, bool] = {}
-
     print(f"[*] ops dashboard — {'DEMO' if args.demo else args.dev_status_url}"
           f"{' · DRY' if args.dry else ''} · state={args.state}")
 
     if args.demo:
+        dash = Dashboard(
+            Poster(url, dry=args.dry), state_path=args.state, key="ops", source="ops-dashboard"
+        )
+        last_good: dict[str, bool] = {}
         for i, snapshot in enumerate(DEMO_SEQUENCE):
             if snapshot is not None:
                 last_good = snapshot
@@ -126,14 +146,15 @@ def main() -> None:
         print("\n[done] one message, edited in place — no reposts.")
         return
 
-    # live: poll dev-status, reconcile the single message
+    # live: poll dev-status, reconcile the single message — same tick the
+    # live_service inner loop runs, just on a plain while/sleep here.
+    job = make_job(
+        url, dry=args.dry, state=args.state,
+        interval=args.interval, dev_status_url=args.dev_status_url,
+    )
     tick = 0
     while args.iterations == 0 or tick < args.iterations:
-        snapshot = fetch_live(args.dev_status_url)
-        if snapshot is not None:
-            last_good = snapshot
-        result = dash.tick(build_panel(snapshot, last_good))
-        print(f"[tick {tick}] {result}")
+        print(f"[tick {tick}] {job.tick()}")
         tick += 1
         if args.iterations == 0 or tick < args.iterations:
             time.sleep(args.interval)

@@ -49,7 +49,12 @@ WATCHED_ROUTES: dict[str, str] = {
 # Agencies whose alerts feed we poll
 AGENCIES = ["1", "40"]  # 1 = King County Metro, 40 = Sound Transit
 
-STATE = StateFile(Path.home() / ".local" / "share" / "transit-discord" / "state.json")
+# Env-overridable so the supervisor (fleet-hosting F1) can point state at its
+# own state dir instead of the container volume / ~/.local/share default.
+STATE = StateFile(
+    Path(os.environ.get("TRANSIT_STATE_DIR", str(Path.home() / ".local" / "share" / "transit-discord")))
+    / "state.json"
+)
 
 STALE_DAYS = 7
 
