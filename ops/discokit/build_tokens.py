@@ -34,6 +34,7 @@ def emit_py(tokens: dict) -> str:
         "    key: str",
         "    color: int   # Discord embed colour (int form of the hex)",
         "    glyph: str   # shape-distinct marker; meaning survives colourblindness",
+        "    dot: str     # emoji-circle variant for chip rows (never inside code blocks)",
         "    label: str\n\n",
     ]
     statuses = {k: v for k, v in tokens["status"].items() if not k.startswith("$")}
@@ -41,7 +42,8 @@ def emit_py(tokens: dict) -> str:
     for key, t in statuses.items():
         color = t["color"]["$value"].lstrip("#")
         lines.append(
-            f'{key.upper().ljust(width)} = Status("{key}", 0x{color}, "{t["glyph"]["$value"]}", "{t["label"]["$value"]}")'
+            f'{key.upper().ljust(width)} = Status("{key}", 0x{color}, '
+            f'"{t["glyph"]["$value"]}", "{t["dot"]["$value"]}", "{t["label"]["$value"]}")'
         )
     names = ", ".join(k.upper() for k in statuses)
     lines += [

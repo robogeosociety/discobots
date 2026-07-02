@@ -35,7 +35,7 @@ from pathlib import Path
 _OPS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_OPS))
 
-from discokit import config, tokens  # noqa: E402
+from discokit import config, graph, tokens  # noqa: E402
 from discokit.dashboard import Dashboard  # noqa: E402
 from discokit.live import Job  # noqa: E402
 from discokit.poster import Poster  # noqa: E402
@@ -47,28 +47,6 @@ VAULTS = ("camping", "dev", "gear", "home", "travel")
 
 STALE_AFTER_S = 1800  # no sync in 30 min ⇒ the */15 trickle likely isn't landing
 HISTORY_CAP = 96  # capped growth-history samples (≈ 8h at a 5 min poll)
-
-_SPARK = "▁▂▃▄▅▆▇█"
-
-
-# --- tiny text-graph primitives (no chart lib — the base image is httpx-only) --------------
-def sparkline(values: list[float]) -> str:
-    """A Unicode sparkline for a non-negative, monotonic-ish series (flat when all-equal)."""
-    if not values:
-        return "—"
-    lo, hi = min(values), max(values)
-    if hi <= lo:
-        return _SPARK[-1] * len(values)  # already caught up / flat — show a full line, not empty
-    n = len(_SPARK) - 1
-    return "".join(_SPARK[min(n, int((v - lo) / (hi - lo) * n + 0.5))] for v in values)
-
-
-def bar(value: float, total: float, width: int = 11) -> str:
-    """A proportional block bar of fixed width."""
-    if total <= 0:
-        return "░" * width
-    filled = max(0, min(width, int(round(value / total * width))))
-    return "█" * filled + "░" * (width - filled)
 
 
 # --- reading the tommybot embeddings DB (read-only; no writer risk) ------------------------
@@ -208,19 +186,21 @@ def build_panel(snap: dict | None, history: list[int]) -> dict:
 
 
 def _graph(snap: dict, history: list[int]) -> str:
-    """The monospace graph block: growth sparkline + per-vault bars + last-sync label + model."""
+    """The monospace graph block: braille growth chart + per-vault bars + last-sync + model."""
     total = max(1, snap["total_chunks"])
     lines = ["```text"]
     if len(history) >= 2:
         delta = history[-1] - history[0]
-        lines.append(f"chunks    {sparkline(history)}   {snap['total_chunks']} total  (+{delta} tracked)")
+        lines.append(graph.braille(history, width=26, height=4))
+        lines.append(f"chunks {snap['total_chunks']:,}  (+{delta:,} tracked)")
     else:
-        lines.append(f"chunks    {snap['total_chunks']} total  (tracking growth from here)")
+        lines.append(f"chunks {snap['total_chunks']:,}  (tracking growth from here)")
     lines.append("vaults")
     width = max(len(v) for v in VAULTS)
     for vault in VAULTS:
         v = snap["vaults"][vault]
-        lines.append(f"  {vault:<{width}} {bar(v['chunks'], total)} {v['chunks']:>5}")
+        count = f"{v['chunks']:>6,}" if v["chunks"] else "     —"
+        lines.append(f"  {vault:<{width}} {graph.bar(v['chunks'], total)} {count}")
     lines.append("```")
 
     last, last_vault = snap.get("last_sync"), snap.get("last_vault")

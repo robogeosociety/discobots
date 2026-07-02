@@ -28,23 +28,23 @@ from pathlib import Path
 _OPS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_OPS))
 
-from discokit import config, tokens  # noqa: E402
+from discokit import config, graph, tokens  # noqa: E402
 from discokit.dashboard import Dashboard  # noqa: E402
 from discokit.live import Job  # noqa: E402
 from discokit.poster import Poster  # noqa: E402
 
 
 # --- rendering --------------------------------------------------------------
-MAX_ROWS = 40  # keep the embed description well under Discord's 4096-char cap
+MAX_SERVICES = 60  # chip rows are dense; cap well under the 4096-char embed limit
 
 
 def _rows(items: list[tuple[str, bool]]) -> str:
-    """Render name→up rows (down-first already applied), capped with a +N tail."""
-    lines = [f"{tokens.up_down(is_up).glyph} {name}" for name, is_up in items]
-    if len(lines) > MAX_ROWS:
-        hidden = len(lines) - MAX_ROWS
-        lines = lines[:MAX_ROWS] + [f"… +{hidden} more"]
-    return "\n".join(lines)
+    """Chip rows (down-first already applied): 🔴/🟢 dots, 4 services per line."""
+    shown = items[:MAX_SERVICES]
+    chips = graph.chips([(name, tokens.up_down(ok).dot) for name, ok in shown])
+    if len(items) > len(shown):
+        chips += f"\n… +{len(items) - len(shown)} more"
+    return chips
 
 
 def build_panel(services: dict[str, bool] | None, last_good: dict[str, bool]) -> dict:

@@ -17,15 +17,16 @@ class Status:
     key: str
     color: int   # Discord embed colour (int form of the hex)
     glyph: str   # shape-distinct marker; meaning survives colourblindness
+    dot: str     # emoji-circle variant for chip rows (never inside code blocks)
     label: str
 
 
-OPERATIONAL = Status("operational", 0x3FB950, "✅", "operational")
-INFO        = Status("info", 0x58A6FF, "ℹ️", "info")
-DEGRADED    = Status("degraded", 0xD29922, "⚠️", "degraded")
-CRITICAL    = Status("critical", 0xF85149, "🔴", "critical")
-MAINTENANCE = Status("maintenance", 0xA371F7, "🛠️", "maintenance")
-UNKNOWN     = Status("unknown", 0x8B949E, "⚪", "unknown")
+OPERATIONAL = Status("operational", 0x3FB950, "✅", "🟢", "operational")
+INFO        = Status("info", 0x58A6FF, "ℹ️", "🔵", "info")
+DEGRADED    = Status("degraded", 0xD29922, "⚠️", "🟡", "degraded")
+CRITICAL    = Status("critical", 0xF85149, "🔴", "🔴", "critical")
+MAINTENANCE = Status("maintenance", 0xA371F7, "🛠️", "🟣", "maintenance")
+UNKNOWN     = Status("unknown", 0x8B949E, "⚪", "⚪", "unknown")
 
 ALL = (OPERATIONAL, INFO, DEGRADED, CRITICAL, MAINTENANCE, UNKNOWN)
 BY_KEY = {s.key: s for s in ALL}

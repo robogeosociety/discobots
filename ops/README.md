@@ -44,16 +44,20 @@ reverse. The Phase-4 gateway (discord.py liveliness) attaches to this same loop 
 The three dashboard panels `live` hosts, as originally shipped:
 
 **dashboard** is the *dynamic dashboard*: instead of posting a new message per poll, it posts
-**one** message and PATCH-edits it in place on each dev-status poll — down-first, colour +
-glyph by status, with an `updated <t:…:R>` stamp that self-refreshes client-side (so unchanged
-polls make no edit at all). If dev-status goes unreachable it edits the message to a degraded
+**one** message and PATCH-edits it in place on each dev-status poll — down-first **emoji-dot
+chip rows** (🔴 first, four services per line), with an `updated <t:…:R>` stamp that
+self-refreshes client-side (so unchanged polls make no edit at all). If dev-status goes unreachable it edits the message to a degraded
 "showing last known state" rather than going silent. The message id + content signature persist
 in the volume `discobot-dashboard-state`, so a restart reconciles the existing message instead
 of double-posting. It was the first consumer of **`discokit`**, the shared design-language kit —
 since the Phase-1 migration *every* bot rides it: `config.webhook()` resolves the webhook,
 `Poster` posts (batched, 429 back-off), `notify` keeps the durable seen-id state, and `tokens`
-is the one palette (generated from `discokit/tokens.json` by `build_tokens.py`, together with a
-`tokens.css` for the upcoming card renderer — edit the JSON, rerun the build, never the outputs).
+is the one palette (generated from `discokit/tokens.json` by `build_tokens.py` — edit the JSON,
+rerun the build, never the outputs). Visualization is **Discord-native text** via
+`discokit.graph` — btop-style braille area charts, block sparklines/bars (code-block-safe),
+and emoji-dot chip rows (the tokens' `dot` channel) — live-updated by the edit-in-place
+dashboards. Cheap string-building, no images. (A Playwright HTML→PNG card spike was built and
+shelved by taste review — branch `cc/card-renderer`, PR #19, kept unmerged for history.)
 
 **loop** is a second `discokit` dashboard that draws `obsidiand` (the asyncio + pydoit supervisor
 loop) as a **spinning ASCII ferris wheel** from its `supervisor_tick` telemetry in the InfluxDB `ops`
@@ -70,8 +74,8 @@ whole sequence locally with no Influx/Discord/deps.
 (tommybot#57) that replaced the OOM-prone once-daily whole-corpus embed. It reads the embeddings DB
 **directly** (a read-only mount of `~/Library/Caches/tommybot`, opened `immutable=1` so it never
 contends with the live WAL-mode writer) — no InfluxDB, since the trickle session itself emits no
-telemetry. Shows a **growth sparkline** of total embedded chunks (self-tracked across polls, in its
-own history file, so the slow climb is visible even though nothing else records it over time), a
+telemetry. Shows a **braille area chart** of total embedded chunks (btop-style, self-tracked across
+polls in its own history file, so the slow climb reads as a rising shoreline), a
 **per-vault** bar breakdown (an untouched vault renders as an empty bar — the visible sign the
 trickle hasn't reached it yet), the **last sync** (timestamp + embedded/changed/rolled counts,
 labeled like the loop wheel's last-tick), the embed model, and staleness (🔴 DB unreachable · ⚠️ no
@@ -88,7 +92,7 @@ ops/
   ops_dashboard.py              # #ops status readout — job hosted by live (standalone = rollback)
   loop_dashboard.py             # #ops supervisor-loop ferris wheel — job hosted by live ("")
   embed_dashboard.py            # #ops embeddings-sync graph — job hosted by live ("")
-  discokit/                     # shared kit: tokens (generated from tokens.json) · config · poster · notify · dashboard · live · guard
+  discokit/                     # shared kit: tokens (generated from tokens.json) · config · poster · notify · dashboard · live · graph · guard
   docker/
     base.Dockerfile             # shared python+supercronic, carries all scripts + discokit
     <bot>/Dockerfile + crontab  # per-bot image; periodic bots run supercronic
