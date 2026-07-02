@@ -34,6 +34,39 @@ class Poster:
                 continue
             self._request("POST", self.url, {"embeds": batch})
 
+    def post_image(self, embed: dict, image: bytes, *, filename: str = "card.png") -> None:
+        """POST one embed with an attached image as its main image (a card)."""
+        embed = {**embed, "image": {"url": f"attachment://{filename}"}}
+        if self.dry:
+            print(f"  ┌─ POST    1 embed + attachment {filename} ({len(image)} bytes)")
+            self._preview({"embeds": [embed]})
+            return
+        import json as _json
+
+        import httpx
+
+        for _ in range(3):
+            try:
+                resp = httpx.post(
+                    self.url,
+                    data={"payload_json": _json.dumps({"embeds": [embed]})},
+                    files={"files[0]": (filename, image, "image/png")},
+                    timeout=30,
+                )
+            except Exception as exc:  # noqa: BLE001 — network hiccup shouldn't crash the loop
+                print(f"[poster] POST (multipart) failed: {exc}", file=sys.stderr)
+                return
+            if resp.status_code == 429:
+                try:
+                    retry = float(resp.headers.get("retry-after") or resp.json().get("retry_after", 1))
+                except Exception:
+                    retry = 1.0
+                time.sleep(retry)
+                continue
+            if resp.status_code >= 400:
+                print(f"[poster] POST {resp.status_code}: {resp.text[:200]}", file=sys.stderr)
+            return
+
     def create(self, payload: dict) -> str | None:
         """POST with ?wait=true and return the new message id (or None)."""
         if self.dry:

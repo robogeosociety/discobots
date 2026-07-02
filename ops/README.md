@@ -88,7 +88,8 @@ ops/
   ops_dashboard.py              # #ops status readout — job hosted by live (standalone = rollback)
   loop_dashboard.py             # #ops supervisor-loop ferris wheel — job hosted by live ("")
   embed_dashboard.py            # #ops embeddings-sync graph — job hosted by live ("")
-  discokit/                     # shared kit: tokens (generated from tokens.json) · config · poster · notify · dashboard · live · guard
+  card_demo.py                  # render the Phase-3 demo cards to PNG (needs a Playwright chromium)
+  discokit/                     # shared kit: tokens (generated from tokens.json) · config · poster · notify · dashboard · live · card · guard
   docker/
     base.Dockerfile             # shared python+supercronic, carries all scripts + discokit
     <bot>/Dockerfile + crontab  # per-bot image; periodic bots run supercronic
