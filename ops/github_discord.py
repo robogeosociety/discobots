@@ -81,30 +81,71 @@ def fetch_events() -> list[dict]:
         return []
 
 
-def event_to_embed(event: dict) -> dict | None:
-    """Convert a GitHub event to a Discord embed dict, or None if not relevant."""
+def fetch_pr(repo: str, number: int) -> dict:
+    """Hydrate a PR's real title/author/url via `gh api`.
+
+    The `/users/{user}/events` feed returns PullRequestEvents with a *stripped*
+    `pull_request` (title/user/html_url all null) — so the embeds read "Untitled PR"
+    / "unknown" with no link. Re-fetch the full PR to enrich them. Returns {} on error.
+    """
+    result = subprocess.run(
+        ["gh", "api", f"/repos/{repo}/pulls/{number}"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"[github-discord] gh api pulls/{number} failed: {result.stderr.strip()}", file=sys.stderr)
+        return {}
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {}
+
+
+def event_to_embed(event: dict, pr_fetcher=fetch_pr) -> dict | None:
+    """Convert a GitHub event to a Discord embed dict, or None if not relevant.
+
+    `pr_fetcher(repo, number) -> dict` hydrates stripped PR payloads; injectable for tests.
+    """
     etype = event.get("type", "")
     payload = event.get("payload", {})
     repo_name = event.get("repo", {}).get("name", "unknown")
 
     if etype == "PullRequestEvent":
-        pr = payload.get("pull_request", {})
         action = payload.get("action", "")
-        title = pr.get("title", "Untitled PR")
-        author = pr.get("user", {}).get("login", "unknown")
-        html_url = pr.get("html_url", "")
+        if action not in ("opened", "closed", "merged"):
+            return None
+        number = payload.get("number")
+        pr = payload.get("pull_request") or {}
+        # The user-events feed strips PR details — hydrate from the PR API.
+        if number and (not pr.get("title") or not pr.get("html_url")):
+            hydrated = pr_fetcher(repo_name, number)
+            if hydrated:
+                pr = hydrated
 
-        if action == "closed" and pr.get("merged"):
+        title = pr.get("title") or "Untitled PR"
+        author = (pr.get("user") or {}).get("login") or "unknown"
+        html_url = pr.get("html_url") or (
+            f"https://github.com/{repo_name}/pull/{number}" if number else ""
+        )
+        merged = bool(pr.get("merged")) or action == "merged"
+        num = f"#{number} " if number else ""
+        author_link = f"[@{author}](https://github.com/{author})" if author != "unknown" else author
+        description = f"**Repo:** {repo_name}\n**Author:** {author_link}"
+
+        if action in ("closed", "merged"):
+            if not merged:
+                return None  # closed-without-merge: not newsworthy
             return {
-                "title": f"PR Merged: {title}",
-                "description": f"**Repo:** {repo_name}\n**Author:** {author}",
+                "title": f"PR Merged: {num}{title}",
+                "description": description,
                 "url": html_url,
                 "color": COLOR_MERGE,
             }
         elif action == "opened":
             return {
-                "title": f"PR Opened: {title}",
-                "description": f"**Repo:** {repo_name}\n**Author:** {author}",
+                "title": f"PR Opened: {num}{title}",
+                "description": description,
                 "url": html_url,
                 "color": COLOR_PR_OPEN,
             }
