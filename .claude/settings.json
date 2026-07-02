@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tommybot help *)",
+      "Bash(tommybot status *)",
+      "Bash(uvx ruff check *)",
+      "Bash(git fetch *)",
+      "Bash(just --list)"
+    ]
+  }
+}

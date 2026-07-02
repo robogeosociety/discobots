@@ -31,6 +31,7 @@ sys.path.insert(0, str(_OPS))
 
 from discokit import config, tokens  # noqa: E402
 from discokit.dashboard import Dashboard  # noqa: E402
+from discokit.live import Job  # noqa: E402
 from discokit.poster import Poster  # noqa: E402
 
 BUCKET = "ops"
@@ -125,19 +126,7 @@ def _w(window: str) -> str:
 # --- live source: InfluxDB supervisor_tick -------------------------------------------------
 def load_config() -> dict:
     """Influx creds from env (run.sh injects them from ask-dash/.env), matching digest.py."""
-
-    def _dotenv(path: str) -> dict[str, str]:
-        env: dict[str, str] = {}
-        p = Path(path).expanduser()
-        if p.exists():
-            for line in p.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, _, v = line.partition("=")
-                    env[k.strip()] = v.strip().strip("\"'")
-        return env
-
-    ask = _dotenv("~/dev/observability/ask-dash/.env")
+    ask = config.read_dotenv("~/dev/observability/ask-dash/.env")
     return {
         "url": os.environ.get("INFLUXDB_URL", ask.get("INFLUX_URL", "http://localhost:8086")),
         "token": os.environ.get("INFLUXDB_TOKEN", ask.get("INFLUX_READ_TOKEN", "")),
@@ -241,6 +230,23 @@ DEMO_SEQUENCE: list[dict | None] = [
 DEMO_CAPTION = ["shadow ok", "no change", "live · event", "lag spike", "stopped", "recovered"]
 
 
+# --- the job (shared by the standalone daemon and live_service's inner loop) ----------------
+def make_job(url: str | None, *, dry: bool = False, state: str, interval: float = 60) -> Job:
+    """One ferris-wheel tick as a live.Job — query Influx, redraw, reconcile."""
+    dash = Dashboard(Poster(url, dry=dry), state_path=state, key="loop", source="loop-dashboard")
+    cfg = load_config()
+    last_good: dict | None = None
+
+    def tick() -> str:
+        nonlocal last_good
+        snap = fetch_live(cfg)
+        if snap is not None:
+            last_good = snap
+        return dash.tick(build_panel(snap, last_good))
+
+    return Job("loop", interval, tick)
+
+
 # --- loop ----------------------------------------------------------------------------------
 def main() -> None:
     ap = argparse.ArgumentParser(description="the #ops supervisor-loop ferris wheel (discokit)")
@@ -257,12 +263,14 @@ def main() -> None:
         print("[loop_dashboard] no DISCORD_WEBHOOK_OPS / DISCORD_WEBHOOK_URL found", file=sys.stderr)
         sys.exit(1)
 
-    dash = Dashboard(Poster(url, dry=args.dry), state_path=args.state, key="loop", source="loop-dashboard")
-    last_good: dict | None = None
     run = "DEMO" if args.demo else "live"
     print(f"[*] loop wheel — {run}{' · DRY' if args.dry else ''} · state={args.state}")
 
     if args.demo:
+        dash = Dashboard(
+            Poster(url, dry=args.dry), state_path=args.state, key="loop", source="loop-dashboard"
+        )
+        last_good: dict | None = None
         for i, snap in enumerate(DEMO_SEQUENCE):
             if snap is not None:
                 last_good = snap
@@ -273,13 +281,11 @@ def main() -> None:
         print("\n[done] one message, edited in place — no reposts.")
         return
 
-    cfg = load_config()
+    # same tick the live_service inner loop runs, just on a plain while/sleep here
+    job = make_job(url, dry=args.dry, state=args.state, interval=args.interval)
     tick = 0
     while args.iterations == 0 or tick < args.iterations:
-        snap = fetch_live(cfg)
-        if snap is not None:
-            last_good = snap
-        print(f"[tick {tick}] {dash.tick(build_panel(snap, last_good))}")
+        print(f"[tick {tick}] {job.tick()}")
         tick += 1
         if args.iterations == 0 or tick < args.iterations:
             time.sleep(args.interval)

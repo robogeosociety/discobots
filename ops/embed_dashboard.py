@@ -35,8 +35,9 @@ from pathlib import Path
 _OPS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_OPS))
 
-from discokit import config, tokens  # noqa: E402
+from discokit import config, graph, tokens  # noqa: E402
 from discokit.dashboard import Dashboard  # noqa: E402
+from discokit.live import Job  # noqa: E402
 from discokit.poster import Poster  # noqa: E402
 
 # The vaults tommybot embeds (mirrors tommybot.obsidian.VALID_VAULTS / obsidian-automations'
@@ -46,28 +47,6 @@ VAULTS = ("camping", "dev", "gear", "home", "travel")
 
 STALE_AFTER_S = 1800  # no sync in 30 min ⇒ the */15 trickle likely isn't landing
 HISTORY_CAP = 96  # capped growth-history samples (≈ 8h at a 5 min poll)
-
-_SPARK = "▁▂▃▄▅▆▇█"
-
-
-# --- tiny text-graph primitives (no chart lib — the base image is httpx-only) --------------
-def sparkline(values: list[float]) -> str:
-    """A Unicode sparkline for a non-negative, monotonic-ish series (flat when all-equal)."""
-    if not values:
-        return "—"
-    lo, hi = min(values), max(values)
-    if hi <= lo:
-        return _SPARK[-1] * len(values)  # already caught up / flat — show a full line, not empty
-    n = len(_SPARK) - 1
-    return "".join(_SPARK[min(n, int((v - lo) / (hi - lo) * n + 0.5))] for v in values)
-
-
-def bar(value: float, total: float, width: int = 11) -> str:
-    """A proportional block bar of fixed width."""
-    if total <= 0:
-        return "░" * width
-    filled = max(0, min(width, int(round(value / total * width))))
-    return "█" * filled + "░" * (width - filled)
 
 
 # --- reading the tommybot embeddings DB (read-only; no writer risk) ------------------------
@@ -207,19 +186,21 @@ def build_panel(snap: dict | None, history: list[int]) -> dict:
 
 
 def _graph(snap: dict, history: list[int]) -> str:
-    """The monospace graph block: growth sparkline + per-vault bars + last-sync label + model."""
+    """The monospace graph block: braille growth chart + per-vault bars + last-sync + model."""
     total = max(1, snap["total_chunks"])
     lines = ["```text"]
     if len(history) >= 2:
         delta = history[-1] - history[0]
-        lines.append(f"chunks    {sparkline(history)}   {snap['total_chunks']} total  (+{delta} tracked)")
+        lines.append(graph.braille(history, width=26, height=4))
+        lines.append(f"chunks {snap['total_chunks']:,}  (+{delta:,} tracked)")
     else:
-        lines.append(f"chunks    {snap['total_chunks']} total  (tracking growth from here)")
+        lines.append(f"chunks {snap['total_chunks']:,}  (tracking growth from here)")
     lines.append("vaults")
     width = max(len(v) for v in VAULTS)
     for vault in VAULTS:
         v = snap["vaults"][vault]
-        lines.append(f"  {vault:<{width}} {bar(v['chunks'], total)} {v['chunks']:>5}")
+        count = f"{v['chunks']:>6,}" if v["chunks"] else "     —"
+        lines.append(f"  {vault:<{width}} {graph.bar(v['chunks'], total)} {count}")
     lines.append("```")
 
     last, last_vault = snap.get("last_sync"), snap.get("last_vault")
@@ -300,6 +281,27 @@ def _demo_history(i: int) -> list[int]:
     return bases[i]
 
 
+# --- the job (shared by the standalone daemon and live_service's inner loop) ----------------
+def make_job(
+    url: str | None,
+    *,
+    dry: bool = False,
+    state: str,
+    interval: float = 300,
+    db_dir: str = "/mnt/tommybot-cache",
+) -> Job:
+    """One embeddings-sync tick as a live.Job — read the DB, regraph, reconcile."""
+    dash = Dashboard(Poster(url, dry=dry), state_path=state, key="embed", source="embed-dashboard")
+    db_path = Path(db_dir) / "embeddings.db"
+
+    def tick() -> str:
+        snap = read_db(db_path)
+        history = record(state, snap["total_chunks"]) if snap else load_history(state)
+        return dash.tick(build_panel(snap, history))
+
+    return Job("embed", interval, tick)
+
+
 # --- loop ----------------------------------------------------------------------------------
 def main() -> None:
     ap = argparse.ArgumentParser(description="the #ops tommybot embeddings sync graph (discokit)")
@@ -321,11 +323,13 @@ def main() -> None:
         print("[embed_dashboard] no DISCORD_WEBHOOK_OPS / DISCORD_WEBHOOK_URL found", file=sys.stderr)
         sys.exit(1)
 
-    dash = Dashboard(Poster(url, dry=args.dry), state_path=args.state, key="embed", source="embed-dashboard")
     run = "DEMO" if args.demo else "live"
     print(f"[*] embed sync — {run}{' · DRY' if args.dry else ''} · state={args.state}")
 
     if args.demo:
+        dash = Dashboard(
+            Poster(url, dry=args.dry), state_path=args.state, key="embed", source="embed-dashboard"
+        )
         for i, snap in enumerate(DEMO_SEQUENCE):
             print(f"\ntick {i}  ({DEMO_CAPTION[i]})")
             print(f"  └─ → {dash.tick(build_panel(snap, _demo_history(i)))}")
@@ -334,12 +338,11 @@ def main() -> None:
         print("\n[done] one message, edited in place — no reposts.")
         return
 
-    db_path = Path(args.db_dir) / "embeddings.db"
+    # same tick the live_service inner loop runs, just on a plain while/sleep here
+    job = make_job(url, dry=args.dry, state=args.state, interval=args.interval, db_dir=args.db_dir)
     tick = 0
     while args.iterations == 0 or tick < args.iterations:
-        snap = read_db(db_path)
-        history = record(args.state, snap["total_chunks"]) if snap else load_history(args.state)
-        print(f"[tick {tick}] {dash.tick(build_panel(snap, history))}")
+        print(f"[tick {tick}] {job.tick()}")
         tick += 1
         if args.iterations == 0 or tick < args.iterations:
             time.sleep(args.interval)

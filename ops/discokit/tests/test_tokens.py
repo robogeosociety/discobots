@@ -29,7 +29,8 @@ def test_six_statuses_with_the_primer_dark_palette():
     assert len(tokens.ALL) == 6
     assert tokens.BY_KEY["operational"].color == 0x3FB950
     assert tokens.BY_KEY["critical"].color == 0xF85149
-    assert all(s.glyph and s.label for s in tokens.ALL)
+    assert all(s.glyph and s.dot and s.label for s in tokens.ALL)
+    assert tokens.OPERATIONAL.dot == "🟢" and tokens.DEGRADED.dot == "🟡"
 
 
 def test_accents_exist_for_the_non_status_hues():
