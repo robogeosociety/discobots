@@ -13,7 +13,7 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **watcher** | `discobot-watcher` | daemon (poll loop) | dev-status `:8077`, Discord | `grafana/.env` webhook |
 | **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
-| **live** | `discobot-live` | daemon (one asyncio loop; 30 s / 60 s / 5 min jobs) | dev-status `:8077`, InfluxDB `:8086`, host `~/Library/Caches/tommybot` (ro mount), Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
+| **live** | `discobot-live` | daemon (one asyncio loop; 5 s / 30 s / 60 s / 5 min jobs) | dev-status `:8077`, InfluxDB `:8086`, host `~/Library/Caches/tommybot` (ro mount, DB + live.json), Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
 
 *(dashboard / loop / embed — the three standalone daemons `live` replaced — stay
 buildable + start-able by name for rollback, out of the default set.)*
@@ -31,8 +31,12 @@ ones. New-ness is keyed on a version-independent skill id (state in volume
 
 **live** is the discobots **inner loop** — the level-2 application loop of the fleet-hosting
 plan (obsidian-automations#149). One container, one process, one asyncio event loop
-(`discokit.live`) hosting all three #ops dashboards as recurring `Job`s on their own cadences
-(status readout 30 s · supervisor wheel 60 s · embeddings graph 5 min). Ticks run in worker
+(`discokit.live`) hosting the #ops dashboards as recurring `Job`s on their own cadences
+(status readout 30 s · supervisor wheel 60 s · embeddings graph 5 min · **tommybot chat
+panel 5 s** — polls the tommybot#72 `TOMMYBOT_LIVE_FILE` snapshot and renders the in-flight
+answer as it thinks: stage dots, token counter, answer tail; see tommybot docs/live.md for
+the contract, and note tommybot's env must set `TOMMYBOT_LIVE_FILE=<cache>/live.json` for
+the panel to light up). Ticks run in worker
 threads, so a slow Influx query never delays the others, and a throwing tick is logged and
 retried next round. It **adopts** the three dashboards' state volumes (mounted at
 `/state/{dashboard,loop,embed}`), so cutover keeps editing the same three Discord messages —

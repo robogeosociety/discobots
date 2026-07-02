@@ -150,12 +150,15 @@ start_live() {
     -e "OPS_DASH_STATE=/state/dashboard/ops.json" \
     -e "LOOP_DASH_STATE=/state/loop/loop.json" \
     -e "EMBED_DASH_STATE=/state/embed/embed.json" \
+    -e "CHAT_DASH_STATE=/state/chat/chat.json" \
+    -e "TOMMYBOT_LIVE_FILE=/mnt/tommybot-cache/live.json" \
     -v discobot-dashboard-state:/state/dashboard \
     -v discobot-loop-state:/state/loop \
     -v discobot-embed-state:/state/embed \
+    -v discobot-chat-state:/state/chat \
     -v "$cache_dir:/mnt/tommybot-cache:ro" \
     discobot-live:latest >/dev/null
-  echo "started discobot-live (inner loop; edits the three #ops messages in place; adopts the dashboard/loop/embed state volumes)"
+  echo "started discobot-live (inner loop; edits the four #ops messages in place; adopts the dashboard/loop/embed state volumes + a new chat volume)"
 }
 
 start_dashboard() {

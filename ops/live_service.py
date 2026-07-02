@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """live_service — the discobots inner loop: every #ops dashboard on ONE asyncio loop.
 
-Consolidates the three dashboard daemons (dashboard / loop / embed — previously
-three containers, three processes, three poll loops) into one supervised process
-running one asyncio event loop (discokit.live). Each dashboard keeps its own
-cadence; a slow tick runs in a worker thread and never delays the others; a
-throwing tick is logged and retried next round. This is the level-2 application
-loop of the fleet-hosting plan — the Phase-4 gateway attaches to this same loop.
+Consolidates the dashboard daemons (dashboard / loop / embed — previously three
+containers, three processes, three poll loops — plus the tommybot chat panel)
+into one supervised process running one asyncio event loop (discokit.live).
+Each dashboard keeps its own cadence; a slow tick runs in a worker thread and
+never delays the others; a throwing tick is logged and retried next round. This
+is the level-2 application loop of the fleet-hosting plan — the Phase-4 gateway
+attaches to this same loop.
 
     # one tick of each dashboard, printed not posted (parity check, no deps):
     python3 ops/live_service.py --dry --once
@@ -15,9 +16,9 @@ loop of the fleet-hosting plan — the Phase-4 gateway attaches to this same loo
     python3 ops/live_service.py
 
 Env knobs (defaults mirror the standalone daemons):
-    OPS_DASH_STATE / LOOP_DASH_STATE / EMBED_DASH_STATE      state file paths
-    OPS_DASH_INTERVAL / LOOP_DASH_INTERVAL / EMBED_DASH_INTERVAL   poll seconds
-    DEV_STATUS_URL, TOMMYBOT_CACHE_DIR                       source locations
+    OPS/LOOP/EMBED/CHAT_DASH_STATE                     state file paths
+    OPS/LOOP/EMBED/CHAT_DASH_INTERVAL                  poll seconds
+    DEV_STATUS_URL, TOMMYBOT_CACHE_DIR, TOMMYBOT_LIVE_FILE   source locations
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ from pathlib import Path
 # ops/ — and flat in /app inside the container. Put that dir on the path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import chat_dashboard  # noqa: E402
 import embed_dashboard  # noqa: E402
 import loop_dashboard  # noqa: E402
 import ops_dashboard  # noqa: E402
@@ -71,6 +73,12 @@ def build_jobs(*, dry: bool) -> list[live.Job]:
             state=env("EMBED_DASH_STATE", "/tmp/embed-dashboard.json"),
             interval=float(env("EMBED_DASH_INTERVAL", "300")),
             db_dir=env("TOMMYBOT_CACHE_DIR", "/mnt/tommybot-cache"),
+        ),
+        chat_dashboard.make_job(
+            url, dry=dry,
+            state=env("CHAT_DASH_STATE", "/tmp/chat-dashboard.json"),
+            interval=float(env("CHAT_DASH_INTERVAL", "5")),
+            live_file=env("TOMMYBOT_LIVE_FILE", "/mnt/tommybot-cache/live.json"),
         ),
     ]
 

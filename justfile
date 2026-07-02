@@ -100,6 +100,7 @@ dry bot:
       dashboard) s=ops_dashboard.py; f="--dry --demo";;
       loop) s=loop_dashboard.py; f="--dry --demo";;
       embed) s=embed_dashboard.py; f="--dry --demo";;
+      chat) s=chat_dashboard.py; f="--dry --demo";;
       watcher) echo "watcher is a daemon — use \`just logs watcher\`" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s $f"
