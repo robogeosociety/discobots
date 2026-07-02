@@ -13,9 +13,10 @@ Layers:
     dashboard  Dashboard.tick(): upsert once, diff, edit-in-place, <t:R> stamp
     live       the asyncio inner loop — many recurring Jobs, one process
     graph      btop-style text graphs: braille charts, sparklines, bars, chips
+    art        MI1-discipline ASCII scenes: density ramps, Bayer dither, bands
     guard      the private-guild allowlist any Discord-*reading* code must honor
 """
 
-from . import config, dashboard, graph, guard, live, notify, poster, tokens  # noqa: F401
+from . import art, config, dashboard, graph, guard, live, notify, poster, tokens  # noqa: F401
 
-__all__ = ["tokens", "config", "notify", "poster", "dashboard", "live", "graph", "guard"]
+__all__ = ["tokens", "config", "notify", "poster", "dashboard", "live", "graph", "art", "guard"]
