@@ -17,8 +17,14 @@ from pathlib import Path
 GRAFANA_ENV = Path.home() / "dev" / "observability" / "grafana" / ".env"
 
 
-def _read_dotenv(path: Path) -> dict[str, str]:
+def read_dotenv(path: str | Path) -> dict[str, str]:
+    """Minimal .env parser — KEY=VALUE and KEY="VALUE" lines, # comments skipped.
+
+    Public because bots also read *other* host .env files this way (digest pulls
+    its InfluxDB settings from ask-dash/.env).
+    """
     env: dict[str, str] = {}
+    path = Path(path).expanduser()
     if not path.exists():
         return env
     for line in path.read_text().splitlines():
@@ -40,7 +46,7 @@ def webhook(name: str = "URL", *, env_file: Path = GRAFANA_ENV) -> str | None:
     for env_key in (key, "DISCORD_WEBHOOK_URL"):
         if os.environ.get(env_key):
             return os.environ[env_key]
-    dotenv = _read_dotenv(env_file)
+    dotenv = read_dotenv(env_file)
     for env_key in (key, "DISCORD_WEBHOOK_URL"):
         if dotenv.get(env_key):
             return dotenv[env_key]

@@ -17,40 +17,28 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
 from influxdb_client import InfluxDBClient
+
+# discokit (the package) sits next to this file, in ops/ — and flat in /app
+# inside the container. Put that dir on the path either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from discokit import config as dk_config  # noqa: E402
+from discokit import tokens  # noqa: E402
+from discokit.poster import Poster  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
 # Configuration helpers
 # ---------------------------------------------------------------------------
 
-def _read_dotenv(path: str) -> dict[str, str]:
-    """Minimal .env parser — handles KEY=VALUE and KEY="VALUE" lines."""
-    env = {}
-    p = Path(path).expanduser()
-    if not p.exists():
-        return env
-    for line in p.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip().strip("\"'")
-        env[key] = value
-    return env
-
-
 def load_config() -> dict:
     """Resolve configuration from env vars, falling back to .env files."""
-    ask_dash_env = _read_dotenv("~/dev/observability/ask-dash/.env")
-    grafana_env = _read_dotenv("~/dev/observability/grafana/.env")
+    ask_dash_env = dk_config.read_dotenv("~/dev/observability/ask-dash/.env")
 
     return {
         "influxdb_url": os.environ.get(
@@ -65,10 +53,7 @@ def load_config() -> dict:
             "INFLUXDB_ORG",
             ask_dash_env.get("INFLUXDB_ORG", ""),
         ),
-        "discord_webhook_url": os.environ.get(
-            "DISCORD_WEBHOOK_URL",
-            grafana_env.get("DISCORD_WEBHOOK_URL", ""),
-        ),
+        "discord_webhook_url": dk_config.webhook() or "",
         "dev_status_url": os.environ.get("DEV_STATUS_URL", "http://localhost:8077"),
     }
 
@@ -293,7 +278,7 @@ def build_embed(
         "embeds": [
             {
                 "title": "\U0001F4CA Weekly Ops Digest",
-                "color": 0x3498DB,
+                "color": tokens.INFO.color,
                 "timestamp": now.isoformat(),
                 "footer": {"text": "ops-digest | ran on schedule"},
                 "fields": [
@@ -321,16 +306,6 @@ def build_embed(
             }
         ]
     }
-
-
-# ---------------------------------------------------------------------------
-# Post to Discord
-# ---------------------------------------------------------------------------
-
-def post_to_discord(webhook_url: str, payload: dict) -> None:
-    resp = httpx.post(webhook_url, json=payload, timeout=15)
-    resp.raise_for_status()
-    print(f"[ok] Discord webhook returned {resp.status_code}")
 
 
 # ---------------------------------------------------------------------------
@@ -385,7 +360,7 @@ def main() -> None:
         print(json.dumps(payload, indent=2, default=str))
     else:
         print("[*] Posting to Discord ...")
-        post_to_discord(cfg["discord_webhook_url"], payload)
+        Poster(cfg["discord_webhook_url"]).post(payload["embeds"])
 
     print("[done]")
 

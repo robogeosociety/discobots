@@ -34,7 +34,11 @@ glyph by status, with an `updated <t:…:R>` stamp that self-refreshes client-si
 polls make no edit at all). If dev-status goes unreachable it edits the message to a degraded
 "showing last known state" rather than going silent. The message id + content signature persist
 in the volume `discobot-dashboard-state`, so a restart reconciles the existing message instead
-of double-posting. It's the first consumer of **`discokit`**, the shared design-language kit.
+of double-posting. It was the first consumer of **`discokit`**, the shared design-language kit —
+since the Phase-1 migration *every* bot rides it: `config.webhook()` resolves the webhook,
+`Poster` posts (batched, 429 back-off), `notify` keeps the durable seen-id state, and `tokens`
+is the one palette (generated from `discokit/tokens.json` by `build_tokens.py`, together with a
+`tokens.css` for the upcoming card renderer — edit the JSON, rerun the build, never the outputs).
 
 **loop** is a second `discokit` dashboard that draws `obsidiand` (the asyncio + pydoit supervisor
 loop) as a **spinning ASCII ferris wheel** from its `supervisor_tick` telemetry in the InfluxDB `ops`
@@ -68,7 +72,7 @@ ops/
   ops_dashboard.py              # the dynamic #ops dashboard (daemon), drives discokit
   loop_dashboard.py             # the #ops supervisor-loop ferris wheel (daemon), drives discokit
   embed_dashboard.py            # the #ops embeddings-sync graph (daemon), drives discokit
-  discokit/                     # shared kit: tokens · config · poster · dashboard
+  discokit/                     # shared kit: tokens (generated from tokens.json) · config · poster · notify · dashboard · guard
   docker/
     base.Dockerfile             # shared python+supercronic, carries all scripts + discokit
     <bot>/Dockerfile + crontab  # per-bot image; periodic bots run supercronic

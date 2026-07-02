@@ -19,20 +19,25 @@ single JSON file in a named volume, mirroring github_discord.py. New-ness is
 keyed on a *version-independent* skill id, so a plugin version bump never
 re-announces an existing skill.
 
-No new runtime deps: stdlib + httpx (already in the base image); a tiny
-hand-rolled front-matter parser avoids pulling in PyYAML.
+No new runtime deps: stdlib + discokit (config/poster/notify, already in the
+base image); a tiny hand-rolled front-matter parser avoids pulling in PyYAML.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-import httpx
+# discokit (the package) sits next to this file, in ops/ — and flat in /app
+# inside the container. Put that dir on the path either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from discokit import config, tokens  # noqa: E402
+from discokit.notify import StateFile  # noqa: E402
+from discokit.poster import Poster  # noqa: E402
 
 # --- config (env-overridable so the container can point at its mounts) --------
 GLOBAL_DIR = Path(
@@ -41,21 +46,22 @@ GLOBAL_DIR = Path(
 PLUGINS_DIR = Path(
     os.environ.get("SKILLS_PLUGINS_DIR", str(Path.home() / ".claude" / "plugins"))
 )
-STATE_DIR = Path(
-    os.environ.get(
-        "SKILLS_STATE_DIR", str(Path.home() / ".local" / "share" / "skills-discord")
+STATE = StateFile(
+    Path(
+        os.environ.get(
+            "SKILLS_STATE_DIR", str(Path.home() / ".local" / "share" / "skills-discord")
+        )
     )
+    / "state.json"
 )
-STATE_FILE = STATE_DIR / "state.json"
 
-DISCORD_EMBEDS_PER_REQUEST = 10
 DESC_LIMIT = 600  # keep embeds skimmable; full text lives in the SKILL.md
 # How long to avoid re-spotlighting a skill (rotate through the catalog).
 SPOTLIGHT_COOLDOWN = 8
 
-COLOR_NEW = 0x2ECC71  # green
-COLOR_SPOTLIGHT = 0x5865F2  # blurple
-COLOR_INIT = 0x95A5A6  # grey
+COLOR_NEW = tokens.OPERATIONAL.color
+COLOR_SPOTLIGHT = tokens.BLURPLE
+COLOR_INIT = tokens.UNKNOWN.color
 
 
 @dataclass(frozen=True)
@@ -137,60 +143,10 @@ def discover_skills() -> dict[str, Skill]:
     return skills
 
 
-# --- state ---------------------------------------------------------------------
-def load_state() -> dict:
-    if not STATE_FILE.exists():
-        return {}
-    try:
-        return json.loads(STATE_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
-        return {}
-
-
-def save_state(state: dict) -> None:
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(state, indent=2))
-
-
 # --- discord -------------------------------------------------------------------
-def get_webhook_url() -> str | None:
-    url = os.environ.get("DISCORD_WEBHOOK_SKILLS") or os.environ.get(
-        "DISCORD_WEBHOOK_URL"
-    )
-    if url:
-        return url
-    fallback = Path.home() / "dev" / "observability" / "grafana" / ".env"
-    if fallback.exists():
-        for key in ("DISCORD_WEBHOOK_SKILLS", "DISCORD_WEBHOOK_URL"):
-            for line in fallback.read_text().splitlines():
-                line = line.strip()
-                if line.startswith(f"{key}="):
-                    return line.split("=", 1)[1].strip().strip("\"'")
-    return None
-
-
 def clip(text: str, limit: int = DESC_LIMIT) -> str:
     text = " ".join(text.split())
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
-
-
-def post_embeds(webhook_url: str, embeds: list[dict], *, dry: bool) -> None:
-    for i in range(0, len(embeds), DISCORD_EMBEDS_PER_REQUEST):
-        batch = embeds[i : i + DISCORD_EMBEDS_PER_REQUEST]
-        if dry:
-            print(f"[dry-run] would post {len(batch)} embed(s):")
-            for e in batch:
-                print(f"  - {e.get('title', '(no title)')}")
-            continue
-        try:
-            resp = httpx.post(webhook_url, json={"embeds": batch}, timeout=10)
-            if resp.status_code >= 400:
-                print(
-                    f"[skills-discord] Discord {resp.status_code}: {resp.text}",
-                    file=sys.stderr,
-                )
-        except httpx.HTTPError as exc:
-            print(f"[skills-discord] Discord request failed: {exc}", file=sys.stderr)
 
 
 def new_skill_embed(s: Skill) -> dict:
@@ -224,9 +180,7 @@ def _iso(epoch: float) -> str:
 
 
 # --- modes ---------------------------------------------------------------------
-def run_new(
-    inv: dict[str, Skill], state: dict, webhook: str | None, *, dry: bool
-) -> None:
+def run_new(inv: dict[str, Skill], state: dict, poster: Poster, *, dry: bool) -> None:
     known: dict = state.setdefault("skills", {})
 
     # First ever run: seed silently and post a single intro, rather than flooding
@@ -239,7 +193,7 @@ def run_new(
 
     state["initialized"] = True
     if not dry:
-        save_state(state)
+        STATE.save(state)
 
     if first_run:
         names = ", ".join(sorted(s.name for s in inv.values()))
@@ -253,8 +207,7 @@ def run_new(
             "color": COLOR_INIT,
         }
         print(f"[skills-discord] first run — seeding {len(inv)} skills, posting intro")
-        if webhook or dry:
-            post_embeds(webhook or "", [embed], dry=dry)
+        poster.post([embed])
         return
 
     if not fresh:
@@ -264,16 +217,11 @@ def run_new(
     print(
         f"[skills-discord] posting {len(fresh)} new skill(s): {', '.join(s.name for s in fresh)}"
     )
-    if webhook or dry:
-        post_embeds(
-            webhook or "",
-            [new_skill_embed(s) for s in sorted(fresh, key=lambda s: s.name)],
-            dry=dry,
-        )
+    poster.post([new_skill_embed(s) for s in sorted(fresh, key=lambda s: s.name)])
 
 
 def run_spotlight(
-    inv: dict[str, Skill], state: dict, webhook: str | None, *, dry: bool
+    inv: dict[str, Skill], state: dict, poster: Poster, *, dry: bool
 ) -> None:
     if not inv:
         print("[skills-discord] nothing to spotlight (empty inventory)")
@@ -294,11 +242,10 @@ def run_spotlight(
     recent = ([chosen_key] + recent)[:SPOTLIGHT_COOLDOWN]
     state["spotlight_recent"] = recent
     if not dry:
-        save_state(state)
+        STATE.save(state)
 
     print(f"[skills-discord] spotlight: {chosen.name} ({chosen.source})")
-    if webhook or dry:
-        post_embeds(webhook or "", [spotlight_embed(chosen)], dry=dry)
+    poster.post([spotlight_embed(chosen)])
 
 
 def main() -> None:
@@ -315,7 +262,7 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    webhook = get_webhook_url()
+    webhook = config.webhook("SKILLS")
     if not webhook and not args.dry:
         print(
             "[skills-discord] no DISCORD_WEBHOOK_SKILLS / DISCORD_WEBHOOK_URL found",
@@ -331,11 +278,12 @@ def main() -> None:
         )
         sys.exit(1)
 
-    state = load_state()
+    poster = Poster(webhook, dry=args.dry)
+    state = STATE.load()
     if args.spotlight:
-        run_spotlight(inv, state, webhook, dry=args.dry)
+        run_spotlight(inv, state, poster, dry=args.dry)
     else:
-        run_new(inv, state, webhook, dry=args.dry)
+        run_new(inv, state, poster, dry=args.dry)
 
 
 if __name__ == "__main__":

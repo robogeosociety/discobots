@@ -1,67 +1,33 @@
 #!/usr/bin/env python3
 """Fetch GitHub activity for user 'tommyroar' and post new events to Discord.
 
-Uses `gh api` CLI (subprocess) to fetch events and httpx for webhook posts.
-Tracks seen event IDs in a local state file to avoid duplicate notifications.
+Uses `gh api` CLI (subprocess) to fetch events; webhook resolution, posting,
+and the seen-id gate come from discokit (config / poster / notify).
 Designed to run on a launchd schedule alongside gh-board-sync.
 """
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 
-import httpx
+# discokit (the package) sits next to this file, in ops/ — and flat in /app
+# inside the container. Put that dir on the path either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from discokit import config, tokens  # noqa: E402
+from discokit.notify import ChangeFeed, StateFile  # noqa: E402
+from discokit.poster import Poster  # noqa: E402
 
 GITHUB_USER = "tommyroar"
-STATE_DIR = Path.home() / ".local" / "share" / "github-discord"
-STATE_FILE = STATE_DIR / "state.json"
-MAX_SEEN_IDS = 500
-DISCORD_EMBEDS_PER_REQUEST = 10
+STATE_FILE = Path.home() / ".local" / "share" / "github-discord" / "state.json"
 
-# Embed colours
-COLOR_MERGE = 0x6F42C1   # purple
-COLOR_PR_OPEN = 0x2ECC71  # green
-COLOR_CI_FAIL = 0xE74C3C  # red
-COLOR_DEPLOY = 0x3498DB   # blue
-
-
-def get_webhook_url() -> str | None:
-    """Return the Discord webhook URL from env or fallback .env file."""
-    url = os.environ.get("DISCORD_WEBHOOK_URL")
-    if url:
-        return url
-
-    fallback = Path.home() / "dev" / "observability" / "grafana" / ".env"
-    if fallback.exists():
-        for line in fallback.read_text().splitlines():
-            line = line.strip()
-            if line.startswith("DISCORD_WEBHOOK_URL="):
-                return line.split("=", 1)[1].strip().strip("\"'")
-    return None
-
-
-def load_seen_ids() -> set[str]:
-    """Load previously seen event IDs from state file."""
-    if not STATE_FILE.exists():
-        return set()
-    try:
-        data = json.loads(STATE_FILE.read_text())
-        return set(data.get("seen_ids", []))
-    except (json.JSONDecodeError, OSError):
-        return set()
-
-
-def save_seen_ids(seen_ids: set[str]) -> None:
-    """Persist seen event IDs, capped at MAX_SEEN_IDS most recent."""
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    # Keep only the most recent IDs to prevent unbounded growth.
-    # Since we can't know true recency from a set, just cap the size.
-    ids_list = list(seen_ids)
-    if len(ids_list) > MAX_SEEN_IDS:
-        ids_list = ids_list[-MAX_SEEN_IDS:]
-    STATE_FILE.write_text(json.dumps({"seen_ids": ids_list}))
+# Palette mapping: merged = the merge purple, opened = healthy, CI fail =
+# critical, deploy = informational.
+COLOR_MERGE = tokens.PURPLE
+COLOR_PR_OPEN = tokens.OPERATIONAL.color
+COLOR_CI_FAIL = tokens.CRITICAL.color
+COLOR_DEPLOY = tokens.INFO.color
 
 
 def fetch_events() -> list[dict]:
@@ -139,33 +105,10 @@ def event_to_embed(event: dict) -> dict | None:
     return None
 
 
-def post_embeds(webhook_url: str, embeds: list[dict], dry: bool = False) -> None:
-    """Post embeds to Discord in batches of up to 10."""
-    for i in range(0, len(embeds), DISCORD_EMBEDS_PER_REQUEST):
-        batch = embeds[i : i + DISCORD_EMBEDS_PER_REQUEST]
-        payload = {"embeds": batch}
-
-        if dry:
-            print(f"[dry-run] Would post {len(batch)} embed(s):")
-            for embed in batch:
-                print(f"  - {embed.get('title', '(no title)')}")
-            continue
-
-        try:
-            resp = httpx.post(webhook_url, json=payload, timeout=10)
-            if resp.status_code >= 400:
-                print(
-                    f"[github-discord] Discord returned {resp.status_code}: {resp.text}",
-                    file=sys.stderr,
-                )
-        except httpx.HTTPError as exc:
-            print(f"[github-discord] Discord request failed: {exc}", file=sys.stderr)
-
-
 def main() -> None:
     dry = "--dry" in sys.argv
 
-    webhook_url = get_webhook_url()
+    webhook_url = config.webhook()
     if not webhook_url and not dry:
         print("[github-discord] No DISCORD_WEBHOOK_URL found", file=sys.stderr)
         sys.exit(1)
@@ -175,26 +118,25 @@ def main() -> None:
         print("[github-discord] No events fetched")
         return
 
-    seen_ids = load_seen_ids()
+    feed = ChangeFeed(StateFile(STATE_FILE))
     new_embeds: list[dict] = []
 
     for event in events:
         eid = event.get("id", "")
-        if not eid or eid in seen_ids:
+        if not feed.is_new(eid):
             continue
-        seen_ids.add(eid)
         embed = event_to_embed(event)
         if embed:
             new_embeds.append(embed)
 
-    save_seen_ids(seen_ids)
+    feed.save()
 
     if not new_embeds:
         print("[github-discord] No new relevant events")
         return
 
     print(f"[github-discord] Posting {len(new_embeds)} embed(s)")
-    post_embeds(webhook_url or "", new_embeds, dry=dry)
+    Poster(webhook_url, dry=dry).post(new_embeds)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
-"""discokit.poster — the Discord webhook transport for a dynamic dashboard.
+"""discokit.poster — the Discord webhook transport.
 
-Two calls the in-place dashboard needs:
+Three calls cover the fleet:
+    post(embeds)                    fire-and-forget notify, batched ≤10/message
     create(payload) -> message_id   POST ?wait=true (so we get the id back)
     edit(message_id, payload)       PATCH .../messages/<id>  (edit in place)
 
@@ -14,6 +15,8 @@ from __future__ import annotations
 import sys
 import time
 
+EMBEDS_PER_MESSAGE = 10  # Discord's hard cap per webhook execute
+
 
 class Poster:
     def __init__(self, webhook_url: str | None, *, dry: bool = False) -> None:
@@ -21,6 +24,16 @@ class Poster:
         self.dry = dry
 
     # --- public API ---------------------------------------------------------
+    def post(self, embeds: list[dict]) -> None:
+        """POST embeds as ordinary webhook messages, batching to Discord's cap."""
+        for i in range(0, len(embeds), EMBEDS_PER_MESSAGE):
+            batch = embeds[i : i + EMBEDS_PER_MESSAGE]
+            if self.dry:
+                print(f"  ┌─ POST    {len(batch)} embed(s)")
+                self._preview({"embeds": batch})
+                continue
+            self._request("POST", self.url, {"embeds": batch})
+
     def create(self, payload: dict) -> str | None:
         """POST with ?wait=true and return the new message id (or None)."""
         if self.dry:

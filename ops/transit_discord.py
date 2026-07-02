@@ -20,6 +20,14 @@ from pathlib import Path
 import httpx
 from google.transit import gtfs_realtime_pb2
 
+# discokit (the package) sits next to this file, in ops/ — and flat in /app
+# inside the container. Put that dir on the path either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from discokit import config, tokens  # noqa: E402
+from discokit.notify import StateFile  # noqa: E402
+from discokit.poster import Poster  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -41,16 +49,15 @@ WATCHED_ROUTES: dict[str, str] = {
 # Agencies whose alerts feed we poll
 AGENCIES = ["1", "40"]  # 1 = King County Metro, 40 = Sound Transit
 
-STATE_DIR = Path.home() / ".local" / "share" / "transit-discord"
-STATE_FILE = STATE_DIR / "state.json"
+STATE = StateFile(Path.home() / ".local" / "share" / "transit-discord" / "state.json")
 
 STALE_DAYS = 7
 
-# GTFS-RT Effect -> embed colour
-RED = 0xE74C3C
-ORANGE = 0xE67E22
-YELLOW = 0xF1C40F
-CLEARED_COLOR = 0x2ECC71  # green
+# GTFS-RT Effect -> embed colour (three disruption tiers + resolved)
+RED = tokens.CRITICAL.color
+ORANGE = tokens.ORANGE
+YELLOW = tokens.DEGRADED.color
+CLEARED_COLOR = tokens.OPERATIONAL.color
 
 EFFECT_RED = {"NO_SERVICE", "SIGNIFICANT_DELAYS", "DETOUR"}
 EFFECT_ORANGE = {"REDUCED_SERVICE", "MODIFIED_SERVICE", "STOP_MOVED"}
@@ -62,20 +69,6 @@ EFFECT_ORANGE = {"REDUCED_SERVICE", "MODIFIED_SERVICE", "STOP_MOVED"}
 
 def _get_oba_api_key() -> str:
     return os.environ.get("OBA_API_KEY", "TEST")
-
-
-def _get_discord_webhook_url() -> str | None:
-    url = os.environ.get("DISCORD_WEBHOOK_URL")
-    if url:
-        return url
-    # Fall back to the grafana .env file
-    env_path = Path.home() / "dev" / "observability" / "grafana" / ".env"
-    if env_path.is_file():
-        for line in env_path.read_text().splitlines():
-            line = line.strip()
-            if line.startswith("DISCORD_WEBHOOK_URL="):
-                return line.split("=", 1)[1].strip().strip("\"'")
-    return None
 
 
 def _truncate(text: str, length: int = 200) -> str:
@@ -188,23 +181,8 @@ def fetch_alerts(client: httpx.Client, agency: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# State management
+# State management (persistence via discokit.notify.StateFile)
 # ---------------------------------------------------------------------------
-
-
-def load_state() -> dict:
-    """Load persisted state. Returns {alert_id: {first_seen, ...}}."""
-    if STATE_FILE.is_file():
-        try:
-            return json.loads(STATE_FILE.read_text())
-        except (json.JSONDecodeError, OSError):
-            pass
-    return {}
-
-
-def save_state(state: dict) -> None:
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
 def prune_stale(state: dict) -> dict:
@@ -214,26 +192,8 @@ def prune_stale(state: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Discord posting
+# Embeds
 # ---------------------------------------------------------------------------
-
-
-def post_to_discord(client: httpx.Client, webhook_url: str, embeds: list[dict]) -> None:
-    """Post embeds to the Discord webhook. Never raises."""
-    if not embeds:
-        return
-    # Discord allows max 10 embeds per message
-    for i in range(0, len(embeds), 10):
-        batch = embeds[i : i + 10]
-        payload = {"embeds": batch}
-        try:
-            resp = client.post(webhook_url, json=payload, timeout=10)
-            if resp.status_code == 429:
-                retry_after = resp.json().get("retry_after", 2)
-                time.sleep(retry_after)
-                client.post(webhook_url, json=payload, timeout=10)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[warn] Discord post failed: {exc}", file=sys.stderr)
 
 
 def build_new_alert_embed(alert: dict) -> dict:
@@ -313,12 +273,12 @@ def _state_entry(alert: dict, first_seen: float | None = None) -> dict:
 
 
 def run(dry: bool = False) -> None:
-    webhook_url = _get_discord_webhook_url()
+    webhook_url = config.webhook()
     if not webhook_url and not dry:
         print("[error] No DISCORD_WEBHOOK_URL configured.", file=sys.stderr)
         sys.exit(1)
 
-    state = prune_stale(load_state())
+    state = prune_stale(STATE.load())
 
     with httpx.Client() as client:
         # Gather watched-route alerts across agencies
@@ -363,9 +323,9 @@ def run(dry: bool = False) -> None:
             for e in all_embeds:
                 print(json.dumps(e, indent=2))
         elif all_embeds and webhook_url:
-            post_to_discord(client, webhook_url, all_embeds)
+            Poster(webhook_url).post(all_embeds)
 
-        save_state(state)
+        STATE.save(state)
 
     summary_parts = []
     if new_embeds:
