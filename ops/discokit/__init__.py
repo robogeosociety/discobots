@@ -10,8 +10,9 @@ Layers present in this spike:
     config     resolve a named webhook (env → grafana/.env)
     poster     execute (?wait=true) + PATCH-edit, with 429 back-off
     dashboard  Dashboard.tick(): upsert once, diff, edit-in-place, <t:R> stamp
+    guard      the private-guild allowlist any Discord-*reading* code must honor
 """
 
-from . import config, dashboard, poster, tokens  # noqa: F401
+from . import config, dashboard, guard, poster, tokens  # noqa: F401
 
-__all__ = ["tokens", "config", "poster", "dashboard"]
+__all__ = ["tokens", "config", "poster", "dashboard", "guard"]
