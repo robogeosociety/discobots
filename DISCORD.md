@@ -14,7 +14,7 @@ committed here** — see `.gitignore`.
 
 | Bot / app | Token location | Key(s) | Purpose | Repo |
 | --- | --- | --- | --- | --- |
-| **tommybot** | `~/dev/tommybot/.env` | `DISCORD_BOT_TOKEN`, `DISCORD_CHANNELS` | Main Obsidian-RAG bot (MLX RAG over vault + InfluxDB); Nomad service `tommybot`. Also the **fallback token** for obsidian-automations. | `tommyroar/tommybot` |
+| **tommybot** | mini: `~/dev/tommybot/.env` (internal-disk checkout) | `DISCORD_BOT_TOKEN`, `DISCORD_CHANNELS` | Main Obsidian-RAG bot (MLX RAG over vault + InfluxDB). Hosted on the **mini** (`tommybot-mini` tier — Qwen3-1.7B, qwengen-verified to fit the 8 GB box) via launchd `com.tommybot.bot-mini` — live since 2026-07-01, tool-calls enabled (incl. `obsidian_*`, co-located with the wrapper). The Air can run it too (`com.tommybot.bot`, its own `.env`) but is currently dormant; only one host should hold a live gateway connection on a given token at a time. Also the **fallback token** for obsidian-automations. | `tommyroar/tommybot` |
 | **ask-dash** | `~/dev/observability/ask-dash/.env` | `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_ALLOWED_USER_IDS` | `/ask` slash-command gateway to the observability stack. | `tommyroar/observability-config` |
 | **Claude Code plugin channels** | `~/.claude/channels/discord-*/.env` | `DISCORD_BOT_TOKEN` (+ `access.json`) | Claude Code agent chat channels — `discord`, `-dev`, `-devchan`, `-ops`, `-home`, `-camp`, `-obsidian`, `-trips`. **Each channel is its own bot/app, plugin-managed.** Do not relocate. | n/a (system-managed) |
 
@@ -55,8 +55,9 @@ connection failure/timeout surfaces as a clean tool-result error string, never a
 ## Where the discobots run (OrbStack on the mini, managed from the Air)
 
 The `ops/` automations run as **individual OrbStack containers on the always-on Mac mini**,
-built on the mini and controlled remotely from the MacBook Air. tommybot stays a `raw_exec`
-Nomad job on the host (MLX needs Apple Metal — no GPU in a Linux container).
+built on the mini and controlled remotely from the MacBook Air. tommybot stays a bare-metal
+`launchd` process on the host (`com.tommybot.bot-mini`, on the mini since 2026-07-01) — MLX
+needs Apple Metal, no GPU in a Linux container.
 
 - **Control plane:** the repo-root [`justfile`](./justfile) on the Air. `just deploy` (push +
   `git pull` + build on the mini) → `just up` / `down` / `ps` / `logs` / `run-now`. Every
