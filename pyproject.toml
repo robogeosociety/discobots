@@ -1,0 +1,36 @@
+# discobots — project metadata + tooling config for CI.
+#
+# The bots themselves run in Docker (ops/docker/*.Dockerfile, deps pip-installed
+# there); this file exists so CI (.github/workflows/ci.yml) can `uv sync` the dev
+# tools and run ruff + pytest against ops/. Keep the runtime deps in step with
+# ops/docker/base.Dockerfile.
+
+[project]
+name = "discobots"
+version = "0.0.0"
+description = "The Discord agent fleet's notifier bots + discokit (the shared design-language kit)."
+requires-python = ">=3.12"
+dependencies = ["httpx", "influxdb-client", "redis"]
+
+[dependency-groups]
+dev = ["ruff>=0.6", "pytest>=8.0"]
+
+# discobots is a collection of scripts, not an installable package — tell uv not
+# to try to build it (there's no build-system), just manage the deps + dev group.
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+# Start with the correctness rules (pyflakes + pycodestyle errors); style-only
+# families (I/UP/B) can be added once the tree is swept. E501 (line length) is
+# owned by `ruff format`, not the linter, so it's ignored here.
+select = ["E", "F"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["ops/tests"]
+addopts = "-ra"

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- discobots CD — runs ops/autodeploy.sh every 2 min on the mini (a login agent,
+     so $HOME + the OrbStack socket resolve). Install with `just autodeploy-install`,
+     which templates $HOME into the path and bootstraps it into the gui domain. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.discobots.autodeploy</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>/Volumes/dev/discobots/ops/autodeploy.sh</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>120</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/discobots-autodeploy.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/discobots-autodeploy.log</string>
+</dict>
+</plist>

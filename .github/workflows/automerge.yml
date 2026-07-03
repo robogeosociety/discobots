@@ -1,0 +1,54 @@
+name: Auto-merge
+
+# Squash-merge a PR once CI is green — but ONLY if it carries the `automerge`
+# label, so nothing merges by surprise. Free-plan private repos can't use branch
+# protection / native auto-merge, so this is the gate; it's self-contained (plain
+# `gh`, no third-party action with write access) and runs from the DEFAULT
+# branch's copy of this file, so a PR can't edit the merge logic to merge itself.
+#
+# NOTE vs the obsidian-automations original: this grants `checks: read` +
+# `statuses: read`. Without them the `statusCheckRollup` query throws
+# ("Resource not accessible by integration") and the merge never fires — the bug
+# that lane hit. Keep them.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Merge the PR if it is labeled `automerge` and every check is green
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          # The open PR whose head is the SHA this CI run was for.
+          pr=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" \
+                 --jq '.[] | select(.state=="open") | .number' | head -1)
+          [ -n "$pr" ] || { echo "no open PR for $HEAD_SHA"; exit 0; }
+
+          # Gate 1: the automerge label.
+          gh pr view "$pr" --repo "$REPO" --json labels --jq '.labels[].name' \
+            | grep -qx automerge || { echo "PR #$pr not labeled automerge — skip"; exit 0; }
+
+          # Gate 2: EVERY check on the head commit is SUCCESS / NEUTRAL / SKIPPED
+          # (no FAILURE, no PENDING). Mixes check-runs (.conclusion) and statuses (.state).
+          green=$(gh pr view "$pr" --repo "$REPO" --json statusCheckRollup --jq \
+            '[.statusCheckRollup[] | (.conclusion // .state)]
+             | (length > 0) and (all(. == "SUCCESS" or . == "NEUTRAL" or . == "SKIPPED"))')
+          [ "$green" = "true" ] || { echo "PR #$pr checks not all green yet — skip"; exit 0; }
+
+          echo "All gates green — merging PR #$pr"
+          gh pr merge "$pr" --repo "$REPO" --squash --delete-branch

@@ -1,0 +1,26 @@
+name: CI
+
+# The test/lint gate for discobots. Runs on every PR and on pushes to main.
+# Auto-merge (automerge.yml) waits for this to be green before it merges a
+# labelled PR; the mini's autodeploy poller only ships what has reached main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Sync dev dependencies
+        run: uv sync --group dev
+      - name: Ruff lint (correctness rules)
+        run: uv run ruff check ops/
+      - name: Pytest
+        run: uv run pytest
