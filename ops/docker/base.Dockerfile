@@ -14,6 +14,9 @@ ENV PYTHONUNBUFFERED=1
 
 # Shared runtime deps (httpx for Discord/HTTP, influxdb-client for digest,
 # redis for the discokit.bus client — the fleet message bus, docs/BUS.md).
+# matplotlib (discokit.chart) is deliberately NOT here — it's a per-bot opt-in
+# (add `RUN pip install matplotlib` to that bot's own docker/<bot>/Dockerfile)
+# so bots that never render a chart pay nothing for the dependency.
 RUN pip install --no-cache-dir httpx influxdb-client redis
 
 # supercronic — runs a crontab as an ordinary (non-root-needed) process, logs to

@@ -55,16 +55,22 @@ class Dashboard:
         return self.state.setdefault(self.key, {})
 
     # --- one tick -----------------------------------------------------------
-    def tick(self, payload: dict) -> str:
-        """Reconcile the live payload with the message on Discord.
+    def tick(self, payload: dict, *, image: tuple[str, bytes] | None = None) -> str:
+        """Reconcile the live payload (and optional chart image) with Discord.
 
         Returns one of: "created" | "edited" | "unchanged".
         `payload` is a webhook body ({"embeds": [...]}) WITHOUT the freshness
         stamp — the dashboard owns that so it only bumps on real change.
+        `image`, if given, is (filename, png_bytes) — e.g. from
+        `discokit.chart` — and the caller's embed must already reference it:
+        `embeds[0]["image"] = {"url": f"attachment://{filename}"}`. Included
+        in the change signature, so a redrawn chart with identical embed text
+        still counts as a change.
         """
         slot = self._slot()
         signature = hashlib.sha256(
             json.dumps(payload, sort_keys=True, default=str).encode()
+            + (image[1] if image else b"")
         ).hexdigest()
         now = int(time.time())
         changed = signature != slot.get("sig")
@@ -79,13 +85,25 @@ class Dashboard:
 
         stamped = self._stamp(payload, slot.get("changed_at", now))
         if not message_id:
-            slot["message_id"] = self.poster.create(stamped)
+            slot["message_id"] = (
+                self.poster.create_with_file(stamped, *image)
+                if image
+                else self.poster.create(stamped)
+            )
             self._save()
             return "created"
 
-        alive = self.poster.edit(message_id, stamped)
+        alive = (
+            self.poster.edit_with_file(message_id, stamped, *image)
+            if image
+            else self.poster.edit(message_id, stamped)
+        )
         if not alive:  # 404 — re-post and re-persist a fresh id
-            slot["message_id"] = self.poster.create(stamped)
+            slot["message_id"] = (
+                self.poster.create_with_file(stamped, *image)
+                if image
+                else self.poster.create(stamped)
+            )
         self._save()
         return "edited"
 

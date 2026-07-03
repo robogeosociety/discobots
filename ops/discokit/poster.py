@@ -5,6 +5,11 @@ Three calls cover the fleet:
     create(payload) -> message_id   POST ?wait=true (so we get the id back)
     edit(message_id, payload)       PATCH .../messages/<id>  (edit in place)
 
+Plus a file-attaching pair (multipart, for chart.py's PNGs — see there for why
+this exists at all):
+    create_with_file(payload, filename, data)   same as create(), + attachment
+    edit_with_file(message_id, payload, filename, data)   same as edit(), + attachment
+
 Handles the per-webhook 429 bucket (5 req / 2 s) with a Retry-After back-off,
 and treats a 404 on edit as "the message was deleted" so the dashboard can
 re-post. httpx is imported lazily so --dry runs need no dependency at all.
@@ -59,13 +64,68 @@ class Poster:
             return False
         return True
 
+    def create_with_file(self, payload: dict, filename: str, data: bytes) -> str | None:
+        """Like create(), plus one file attachment (multipart) — e.g. a chart PNG.
+
+        ``payload``'s embed should reference it: ``embeds[0]["image"] =
+        {"url": f"attachment://{filename}"}``.
+        """
+        if self.dry:
+            print(f"  ┌─ CREATE  POST ?wait=true  [+{filename}, {len(data)}B]")
+            self._preview(payload)
+            return "dry-0001"
+        resp = self._request_multipart(
+            "POST", f"{self.url}?wait=true", payload, filename, data
+        )
+        if resp is None:
+            return None
+        try:
+            return resp.json().get("id")
+        except Exception:
+            return None
+
+    def edit_with_file(
+        self, message_id: str, payload: dict, filename: str, data: bytes
+    ) -> bool:
+        """Like edit(), plus replacing the attachment (e.g. a refreshed chart PNG)."""
+        if self.dry:
+            print(
+                f"  ├─ EDIT    PATCH …/messages/{message_id}  [+{filename}, {len(data)}B]"
+            )
+            self._preview(payload)
+            return True
+        resp = self._request_multipart(
+            "PATCH", f"{self.url}/messages/{message_id}", payload, filename, data
+        )
+        if resp is not None and resp.status_code == 404:
+            return False
+        return True
+
     # --- internals ----------------------------------------------------------
     def _request(self, method: str, url: str, payload: dict):
+        return self._send(method, url, json=payload)
+
+    def _request_multipart(
+        self, method: str, url: str, payload: dict, filename: str, data: bytes
+    ):
+        import json as _json
+
+        body = dict(payload)
+        body["attachments"] = [{"id": 0, "filename": filename}]
+        return self._send(
+            method,
+            url,
+            data={"payload_json": _json.dumps(body)},
+            files={"files[0]": (filename, data, "image/png")},
+        )
+
+    def _send(self, method: str, url: str, **kwargs):
+        """Shared 429 back-off + error logging around one httpx call."""
         import httpx
 
         for _ in range(3):
             try:
-                resp = httpx.request(method, url, json=payload, timeout=15)
+                resp = httpx.request(method, url, timeout=15, **kwargs)
             except Exception as exc:  # noqa: BLE001 — network hiccup shouldn't crash the loop
                 print(f"[poster] {method} failed: {exc}", file=sys.stderr)
                 return None
