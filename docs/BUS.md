@@ -60,6 +60,32 @@ retained-key suffix; `data` is the payload the contract below pins per topic.
 
 Keys: retained values live at `retain:<topic>`; streams at `stream:<name>`.
 
+## Coordination (locks + counters)
+
+Beyond messaging, the bus is the fleet's **coordination layer** for its separate
+processes — the same fail-open contract: no bus ⇒ the lock always "acquires"
+(single-process semantics preserved) and the counter returns `None`, so a broken
+bus can never wedge a caller.
+
+| Primitive | Call | Keys | Use |
+| --- | --- | --- | --- |
+| **distributed lock** | `with bus.locked(name) as got:` (or `lock_acquire`/`lock_release`) | `lock:<name>` | cross-process prohibit-overlap: a defensive singleton guard so two `discobot-live` containers can't double-edit a panel; the supervisor's per-job locks once jobs split into processes |
+| **windowed counter** | `bus.incr(name, window=…)` | `count:<name>` | rate limits / live tallies: the #149 Claude-router **token pool** (per-channel API budget), "posts this hour", debounce windows |
+
+```python
+with bus.locked("panel:ops", ttl=60) as got:
+    if got:                      # someone else holds it → skip this tick
+        dashboard.tick(payload)
+
+if (bus.incr(f"router:{channel}", window=60) or 0) <= RATE:
+    answer = claude(...)         # within the per-channel minute budget
+```
+
+The lock is `SET NX EX` (TTL-bounded, so a crashed holder self-releases) with a
+GET+DEL-if-match release — best-effort, not a Lua CAS, which is the right
+strength for coordinating a small fleet. Hot-path wiring (the panel guard, the
+router pool) lands as its consumers do; this ships the primitives + tests.
+
 ## Topics (the catalog)
 
 ### `fleet.supervisor.tick` — telemetry — **live (this PR's edge)**
