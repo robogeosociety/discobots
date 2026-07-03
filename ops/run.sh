@@ -41,6 +41,21 @@ hostify() { sed -e "s#//localhost#//$HOSTGW#g" -e "s#//127\.0\.0\.1#//$HOSTGW#g"
 
 common_run=(--restart unless-stopped --add-host "$HOSTGW:host-gateway" -e "TZ=$TZ_VAL")
 
+start_valkey() {
+  # The fleet message bus (docs/BUS.md) — a Valkey (BSD Redis) broker the loops
+  # publish/subscribe through. Bound to the mini's LOOPBACK only (private by
+  # default); containers reach it via host.docker.internal:6379 (BUS_URL, injected
+  # into discobot-live below). Data volume keeps streams across restarts; a bus
+  # outage just degrades consumers to direct polling, so this is best-effort.
+  # Ownership moves to the fleet supervisor's REGISTRY when that lands.
+  docker rm -f discobot-valkey >/dev/null 2>&1 || true
+  docker run -d --name discobot-valkey --restart unless-stopped \
+    -p 127.0.0.1:6379:6379 \
+    -v discobot-valkey-data:/data \
+    valkey/valkey:8-alpine valkey-server --save 60 1000 --appendonly no >/dev/null
+  echo "started discobot-valkey (fleet message bus; loopback :6379; data in volume discobot-valkey-data)"
+}
+
 start_digest() {
   local url token org webhook
   url="$(dotget "$ASKDASH_ENV" INFLUX_URL)"; url="${url:-http://localhost:8086}"
@@ -147,6 +162,7 @@ start_live() {
     -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
     -e "INFLUXDB_URL=$url" -e "INFLUXDB_TOKEN=$token" -e "INFLUXDB_ORG=$org" \
     -e "DISCORD_WEBHOOK_URL=$webhook" \
+    -e "BUS_URL=redis://$HOSTGW:6379" \
     -e "OPS_DASH_STATE=/state/dashboard/ops.json" \
     -e "LOOP_DASH_STATE=/state/loop/loop.json" \
     -e "EMBED_DASH_STATE=/state/embed/embed.json" \
@@ -226,11 +242,13 @@ start_embed() {
 }
 
 bots=("$@")
-# Default set: `live` replaces the three standalone dashboard daemons
-# (dashboard/loop/embed) — those remain start-able by name for rollback.
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills live)
+# Default set: `valkey` (the message bus) comes up first so `live` finds it;
+# `live` replaces the three standalone dashboard daemons (dashboard/loop/embed),
+# which remain start-able by name for rollback.
+[ ${#bots[@]} -eq 0 ] && bots=(valkey digest github watcher transit skills live)
 for b in "${bots[@]}"; do
   case "$b" in
+    valkey)    start_valkey ;;
     digest)    start_digest ;;
     github)    start_github ;;
     watcher)   start_watcher ;;

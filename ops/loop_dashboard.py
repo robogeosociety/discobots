@@ -30,12 +30,14 @@ _OPS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_OPS))
 
 from discokit import config, tokens  # noqa: E402
+from discokit.bus import Bus  # noqa: E402
 from discokit.dashboard import Dashboard  # noqa: E402
 from discokit.live import Job  # noqa: E402
 from discokit.poster import Poster  # noqa: E402
 
 BUCKET = "ops"
 MEASUREMENT = "supervisor_tick"
+BUS_TOPIC = "fleet.supervisor.tick"  # the supervisor publishes its beat here (docs/BUS.md)
 WINDOW = "-2h"  # trigger/fire counts window
 EVENT_WINDOW = "-24h"  # how far back to look for the last event (they can be sparse)
 SPIN_SECS = 60  # the wheel advances one cabin per minute (the loop's ~60s beat)
@@ -134,7 +136,22 @@ def load_config() -> dict:
     }
 
 
-def fetch_live(cfg: dict) -> dict | None:
+def fetch_live(cfg: dict, bus: Bus | None = None) -> dict | None:
+    """The wheel snapshot — bus first, InfluxDB fallback.
+
+    Prefer the supervisor's own tick published on the bus (fleet.supervisor.tick,
+    docs/BUS.md): a push the supervisor already computes, no Influx round-trip.
+    When the bus is disabled/quiet/expired, fall back to querying supervisor_tick
+    from InfluxDB exactly as before — the bus is an accelerant, not a dependency.
+    """
+    if bus is not None:
+        env = bus.retained(BUS_TOPIC)
+        if env and isinstance(env.get("data"), dict):
+            return env["data"]
+    return _fetch_influx(cfg)
+
+
+def _fetch_influx(cfg: dict) -> dict | None:
     """Query supervisor_tick → a snapshot dict, or None if Influx is unreachable / has no data."""
     try:
         from influxdb_client import InfluxDBClient
@@ -231,15 +248,18 @@ DEMO_CAPTION = ["shadow ok", "no change", "live · event", "lag spike", "stopped
 
 
 # --- the job (shared by the standalone daemon and live_service's inner loop) ----------------
-def make_job(url: str | None, *, dry: bool = False, state: str, interval: float = 60) -> Job:
-    """One ferris-wheel tick as a live.Job — query Influx, redraw, reconcile."""
+def make_job(
+    url: str | None, *, dry: bool = False, state: str, interval: float = 60, bus_url: str | None = None
+) -> Job:
+    """One ferris-wheel tick as a live.Job — bus (or Influx), redraw, reconcile."""
     dash = Dashboard(Poster(url, dry=dry), state_path=state, key="loop", source="loop-dashboard")
     cfg = load_config()
+    bus = Bus(bus_url, src="discobot-live")
     last_good: dict | None = None
 
     def tick() -> str:
         nonlocal last_good
-        snap = fetch_live(cfg)
+        snap = fetch_live(cfg, bus)
         if snap is not None:
             last_good = snap
         return dash.tick(build_panel(snap, last_good))
@@ -256,6 +276,8 @@ def main() -> None:
     ap.add_argument("--interval", type=int, default=60, help="poll seconds (live mode)")
     ap.add_argument("--iterations", type=int, default=0, help="0 = forever (live mode)")
     ap.add_argument("--state", default=os.environ.get("LOOP_DASH_STATE", "/tmp/loop-dashboard.json"))
+    ap.add_argument("--bus-url", default=os.environ.get("BUS_URL"),
+                    help="Valkey/Redis bus URL; unset ⇒ bus off, fall back to InfluxDB")
     args = ap.parse_args()
 
     url = config.webhook("OPS")  # dedicated DISCORD_WEBHOOK_OPS, else the general webhook → #ops
@@ -282,7 +304,7 @@ def main() -> None:
         return
 
     # same tick the live_service inner loop runs, just on a plain while/sleep here
-    job = make_job(url, dry=args.dry, state=args.state, interval=args.interval)
+    job = make_job(url, dry=args.dry, state=args.state, interval=args.interval, bus_url=args.bus_url)
     tick = 0
     while args.iterations == 0 or tick < args.iterations:
         print(f"[tick {tick}] {job.tick()}")
