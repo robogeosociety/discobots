@@ -60,8 +60,12 @@ start_digest() {
 }
 
 start_github() {
+  # Prefer a dedicated #github webhook (DISCORD_WEBHOOK_GITHUB) so PR events land
+  # in #github instead of the shared #ops feed; falls back to the general webhook
+  # (→ #ops, today's behaviour) until that key exists in grafana/.env.
   local webhook ghtoken
-  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)"
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_GITHUB)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
   ghtoken="$(gh auth token 2>/dev/null || true)"
   [ -n "$webhook" ] || { echo "github: DISCORD_WEBHOOK_URL missing in grafana/.env" >&2; return 1; }
   [ -n "$ghtoken" ] || { echo "github: \`gh auth token\` empty — run \`gh auth login\` on the mini" >&2; return 1; }
@@ -74,15 +78,37 @@ start_github() {
 }
 
 start_watcher() {
+  # Prefer the dedicated #ops-watcher webhook so state-change alerts live in
+  # #ops-watcher (with the opswatcher status panel) instead of the shared #ops
+  # feed; falls back to the general webhook until DISCORD_WEBHOOK_OPSWATCHER exists.
   local webhook
-  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)"
-  [ -n "$webhook" ] || { echo "watcher: DISCORD_WEBHOOK_URL missing in grafana/.env" >&2; return 1; }
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_OPSWATCHER)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  [ -n "$webhook" ] || { echo "watcher: no DISCORD_WEBHOOK_OPSWATCHER/URL in grafana/.env" >&2; return 1; }
   docker rm -f discobot-watcher >/dev/null 2>&1 || true
   docker run -d --name discobot-watcher "${common_run[@]}" \
     -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
     -e "DISCORD_WEBHOOK_URL=$webhook" \
     discobot-watcher:latest >/dev/null
   echo "started discobot-watcher (daemon, polls dev-status)"
+}
+
+start_opswatcher() {
+  # The #ops-watcher live status panel: ONE dev-status message edited in place,
+  # replacing the retired legacy launchd watcher's ~278/day of discrete up/down
+  # posts. Reuses the ops_dashboard image (discobot-dashboard) pointed at the
+  # dedicated #ops-watcher webhook + its own state volume. Requires
+  # DISCORD_WEBHOOK_OPSWATCHER in grafana/.env (the existing #ops-watcher webhook).
+  local webhook
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_OPSWATCHER)"
+  [ -n "$webhook" ] || { echo "opswatcher: DISCORD_WEBHOOK_OPSWATCHER missing in grafana/.env" >&2; return 1; }
+  docker rm -f discobot-opswatcher >/dev/null 2>&1 || true
+  docker run -d --name discobot-opswatcher "${common_run[@]}" \
+    -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
+    -e "DISCORD_WEBHOOK_OPS=$webhook" \
+    -v discobot-opswatcher-state:/state \
+    discobot-dashboard:latest >/dev/null
+  echo "started discobot-opswatcher (daemon; edits one #ops-watcher message in place; state in volume discobot-opswatcher-state)"
 }
 
 start_transit() {
@@ -257,12 +283,13 @@ bots=("$@")
 # (dashboard/loop/embed), and `transit-panel` (one edited #transit message)
 # replaces `transit` (the per-alert firehose). Both replaced daemons stay
 # start-able by name for rollback.
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit-panel skills live)
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher opswatcher transit-panel skills live)
 for b in "${bots[@]}"; do
   case "$b" in
     digest)    start_digest ;;
     github)    start_github ;;
     watcher)   start_watcher ;;
+    opswatcher) start_opswatcher ;;
     transit)   start_transit ;;
     transit-panel) start_transit_panel ;;
     skills)    start_skills ;;
@@ -270,6 +297,6 @@ for b in "${bots[@]}"; do
     dashboard) start_dashboard ;;
     loop)      start_loop ;;
     embed)     start_embed ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|transit-panel|skills|live|dashboard|loop|embed)" >&2; exit 2 ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|opswatcher|transit|transit-panel|skills|live|dashboard|loop|embed)" >&2; exit 2 ;;
   esac
 done
