@@ -1,0 +1,7 @@
+# Local state / secrets — these live in the mini's channel state dir, not here.
+*.bak
+.env
+access.json
+chat_id
+__pycache__/
+*.pyc
