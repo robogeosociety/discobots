@@ -89,6 +89,12 @@ run-now bot:
 spotlight:
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-skills python /app/skills_discord.py --spotlight"
 
+# Refresh the pinned #ops fleet-status board from ops/fleet.toml (one-shot; edits the panel in place).
+# The wiki page is regenerated + published separately:
+#   python3 ops/fleet_status.py --markdown docs/fleet-status.md   (then commit + /wikime)
+fleet-status:
+    ssh {{mini_host}} 'export PATH=$HOME/.orbstack/bin:$PATH; env="$HOME/dev/observability/grafana/.env"; w=$(sed -n "s/^DISCORD_WEBHOOK_OPS=//p" "$env" | head -1); [ -n "$w" ] || w=$(sed -n "s/^DISCORD_WEBHOOK_URL=//p" "$env" | head -1); [ -n "$w" ] || { echo "fleet-status: no #ops webhook in grafana/.env" >&2; exit 1; }; docker run --rm -v discobot-fleet-status-state:/state -e DISCORD_WEBHOOK_OPS="$w" discobot-live:latest python3 /app/fleet_status.py --discord --state /state/fleet.json'
+
 # Dry-run a periodic bot once (no Discord post) — handy after a deploy.
 # (Bots differ: digest uses --dry-run, github/transit use --dry.)
 dry bot:

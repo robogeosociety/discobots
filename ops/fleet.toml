@@ -1,0 +1,180 @@
+# fleet.toml — the single source of truth for the fleet-status board.
+#
+# `fleet_status.py` renders THIS file into two places that must never drift:
+#   • a pinned, edit-in-place #ops Discord panel   (fleet_status.py --discord)
+#   • docs/fleet-status.md  → the dev wiki page     (fleet_status.py --markdown)
+#
+# Edit here, then run `just fleet-status` (reposts the panel) and regenerate the
+# page with `python3 ops/fleet_status.py --markdown docs/fleet-status.md`
+# (a test asserts the committed page matches this file). See docs/fleet-status.md
+# → "Keeping it in sync".
+#
+# status ∈ operational | degraded | critical | maintenance | info | unknown
+#   (maps to the discokit.tokens palette — the dot in the Discord panel).
+
+[meta]
+title = "fleet status"
+tagline = "the Discord agent fleet — bots, collectors, data, graphs"
+wiki_url = "https://tommys-mac-mini.tail59a169.ts.net:5193/discobots/docs/fleet-status"
+routing_note = "webhook URLs live in grafana/.env on the mini (the routing SSOT); one feed → one channel."
+
+# ── Discord ops bots (the notifier fleet — OrbStack containers on the mini) ────
+[[bots]]
+name = "obsidian-supervisor"
+channel = "#ops"
+cadence = "live · per-min, edit-in-place"
+what = "automation loop status: braille activity graph + job health chips"
+repo = "obsidian-automations"
+status = "operational"
+
+[[bots]]
+name = "live"
+channel = "#ops"
+cadence = "daemon · edit-in-place"
+what = "inner loop — four #ops panels in one asyncio process: ops status, loop ferris-wheel, embeddings sync, tommybot chat"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
+name = "opswatcher"
+channel = "#ops-watcher"
+cadence = "daemon · edit-in-place"
+what = "dev-status board — one live panel (collapsed the ~278/day up/down spam)"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
+name = "transit-panel"
+channel = "#transit"
+cadence = "daemon · 60s, edit-in-place"
+what = "per-line Link/transit status from OneBusAway (collapsed the ~62/day alert churn)"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
+name = "github"
+channel = "#github"
+cadence = "every 30 min"
+what = "new GitHub activity across the tommyroar org (PRs, pushes)"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
+name = "digest"
+channel = "#ops"
+cadence = "weekly · Mon 08:15 PT"
+what = "InfluxDB health + dev-status weekly digest"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
+name = "skills"
+channel = "#skills"
+cadence = "every 3h + daily 💡 spotlight"
+what = "new Claude Code skills acquired across the fleet"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
+name = "grafana-alerting"
+channel = "#alerts"
+cadence = "on firing / resolved"
+what = "platform-health alerts from Grafana's InfluxDB-backed rules"
+repo = "observability-config"
+status = "operational"
+
+# ── Collectors / data pipelines (feed notes + Influx + the channels above) ────
+[[collectors]]
+name = "weather"
+source = "wttr.in"
+into = "daily / weekly notes"
+status = "operational"
+
+[[collectors]]
+name = "transit"
+source = "OneBusAway GTFS-Realtime"
+into = "#transit panel + daily notes"
+status = "operational"
+
+[[collectors]]
+name = "github"
+source = "GitHub API"
+into = "#github + changelog + daily notes"
+status = "operational"
+
+[[collectors]]
+name = "mountain"
+source = "mountain webcams"
+into = "daily notes"
+status = "operational"
+
+[[collectors]]
+name = "tokens"
+source = "CF/token pool status"
+into = "daily notes"
+status = "operational"
+
+[[collectors]]
+name = "campsite-inventory"
+source = "campsite mirrors"
+into = "RGS PRs + camping notes"
+status = "operational"
+
+[[collectors]]
+name = "vault_mirror"
+source = "git blob-OID sync of the vault"
+into = "the supervisor event-gate (fans change edges to jobs)"
+status = "operational"
+
+[[collectors]]
+name = "obsidian-supervisor jobs"
+source = "22-job asyncio loop"
+into = "weekly-data, daily-note, asset-graph, the wiki builds, vault snapshot/backup"
+status = "operational"
+
+# ── Data sources (where the graphs and health signals come from) ──────────────
+[[data_sources]]
+name = "InfluxDB · ops bucket"
+kind = "time-series DB"
+serves = "supervisor telemetry, Grafana dashboards, the #ops loop panel"
+status = "operational"
+
+[[data_sources]]
+name = "Grafana"
+kind = "dashboards + alerting"
+serves = "26 dashboards; firing/resolved rules → #alerts"
+status = "operational"
+
+[[data_sources]]
+name = "supervisor /ticks + /health"
+kind = "HTTP JSON (127.0.0.1:8787, tailnet)"
+serves = "the last 480 supervisor_tick frames (lag, fired, doit, budget) — no Grafana round-trip"
+status = "operational"
+
+[[data_sources]]
+name = "fleet bus · Valkey"
+kind = "Redis-compatible pub/sub"
+serves = "fleet.supervisor.tick → the #ops ferris wheel (discokit.bus, docs/BUS.md)"
+status = "operational"
+
+[[data_sources]]
+name = "vault mirror git"
+kind = "bare --depth-1 mirror"
+serves = "the event source — a SHA move fans change edges to the supervisor's event jobs"
+status = "operational"
+
+# ── Graph kit (the text-native vocabulary the panels render in) ───────────────
+[[graphs]]
+name = "discokit.graph"
+kinds = "braille area · block spark · proportional bar"
+repo = "discobots (ops/discokit/graph.py)"
+
+[[graphs]]
+name = "supervisor.textgraph"
+kinds = "zero-anchored braille + spark (count series)"
+repo = "obsidian-automations (supervisor/textgraph.py)"
+
+[[graphs]]
+name = "doit asset-graph"
+kinds = "Mermaid DAG (file_dep → target)"
+repo = "obsidian-automations (automations/graph.py)"
