@@ -12,8 +12,9 @@ FROM python:3.12-slim
 # (esp. the watcher daemon, which would otherwise block-buffer its prints).
 ENV PYTHONUNBUFFERED=1
 
-# Shared runtime deps (httpx for Discord/HTTP, influxdb-client for digest).
-RUN pip install --no-cache-dir httpx influxdb-client
+# Shared runtime deps (httpx for Discord/HTTP, influxdb-client for digest,
+# redis for the discokit.bus client — the fleet message bus, docs/BUS.md).
+RUN pip install --no-cache-dir httpx influxdb-client redis
 
 # supercronic — runs a crontab as an ordinary (non-root-needed) process, logs to
 # stdout, no PID-1/syslog assumptions. The periodic bots use it; watcher doesn't.

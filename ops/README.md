@@ -13,10 +13,12 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **watcher** | `discobot-watcher` | daemon (poll loop) | dev-status `:8077`, Discord | `grafana/.env` webhook |
 | **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
-| **live** | `discobot-live` | daemon (one asyncio loop; 5 s / 30 s / 60 s / 5 min jobs) | dev-status `:8077`, InfluxDB `:8086`, host `~/Library/Caches/tommybot` (ro mount, DB + live.json), Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
+| **live** | `discobot-live` | daemon (one asyncio loop; 5 s / 30 s / 60 s / 5 min jobs) | dev-status `:8077`, InfluxDB `:8086`, host `~/Library/Caches/tommybot` (ro mount, DB + live.json), **the bus `:6379`**, Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
+| **valkey** | `discobot-valkey` | daemon (broker) | — (loopback `:6379`) | none — no secret; the fleet message bus (`docs/BUS.md`) |
 
 *(dashboard / loop / embed — the three standalone daemons `live` replaced — stay
-buildable + start-able by name for rollback, out of the default set.)*
+buildable + start-able by name for rollback, out of the default set. `valkey` starts
+first in the default set so `live` finds the bus.)*
 
 A container reaches the mini's localhost services (InfluxDB, dev-status) via
 `host.docker.internal`; `run.sh` rewrites `localhost`/`127.0.0.1` URLs accordingly.
@@ -64,8 +66,11 @@ dashboards. Cheap string-building, no images. (A Playwright HTML→PNG card spik
 shelved by taste review — branch `cc/card-renderer`, PR #19, kept unmerged for history.)
 
 **loop** is a second `discokit` dashboard that draws `obsidiand` (the asyncio + pydoit supervisor
-loop) as a **spinning ASCII ferris wheel** from its `supervisor_tick` telemetry in the InfluxDB `ops`
-bucket. The wheel turns one cabin per minute (so the live message visibly spins as the loop ticks);
+loop) as a **spinning ASCII ferris wheel** from its `supervisor_tick` telemetry. It reads the tick
+off the **fleet message bus** first (`fleet.supervisor.tick`, a push the supervisor already
+computes — see [`docs/BUS.md`](../docs/BUS.md)) and falls back to querying the InfluxDB `ops` bucket
+when the bus is quiet/disabled, so the wheel works with or without the bus. The wheel turns one
+cabin per minute (so the live message visibly spins as the loop ticks);
 the lead cabin **◉ is the last tick** and a **✦ cabin is the last event**, both labeled with a relative
 timestamp, over a footer with the trigger split (cron / event / backstop) + fire count and a header
 with lag / shadow-mode health (ℹ️ healthy · ⚠️ lag spike · 🔴 stopped). It posts to **#ops** — the same
@@ -96,7 +101,7 @@ ops/
   ops_dashboard.py              # #ops status readout — job hosted by live (standalone = rollback)
   loop_dashboard.py             # #ops supervisor-loop ferris wheel — job hosted by live ("")
   embed_dashboard.py            # #ops embeddings-sync graph — job hosted by live ("")
-  discokit/                     # shared kit: tokens (generated from tokens.json) · config · poster · notify · dashboard · live · graph · guard
+  discokit/                     # shared kit: tokens (generated from tokens.json) · config · poster · notify · dashboard · live · graph · art · bus · guard
   docker/
     base.Dockerfile             # shared python+supercronic, carries all scripts + discokit
     <bot>/Dockerfile + crontab  # per-bot image; periodic bots run supercronic

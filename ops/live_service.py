@@ -67,6 +67,7 @@ def build_jobs(*, dry: bool) -> list[live.Job]:
             url, dry=dry,
             state=env("LOOP_DASH_STATE", "/tmp/loop-dashboard.json"),
             interval=float(env("LOOP_DASH_INTERVAL", "60")),
+            bus_url=env("BUS_URL", None),
         ),
         embed_dashboard.make_job(
             url, dry=dry,

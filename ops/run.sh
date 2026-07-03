@@ -41,6 +41,31 @@ hostify() { sed -e "s#//localhost#//$HOSTGW#g" -e "s#//127\.0\.0\.1#//$HOSTGW#g"
 
 common_run=(--restart unless-stopped --add-host "$HOSTGW:host-gateway" -e "TZ=$TZ_VAL")
 
+# The shared bus network: bus producers/consumers (valkey, live) join it and
+# address the broker by container name — a loopback-published port isn't
+# reachable cross-container, so a user-defined network + DNS is the private,
+# no-exposure way. Idempotent; the obsidian-automations supervisor compose joins
+# the SAME external network (fleet-bus) to reach discobot-valkey by name.
+BUS_NET="fleet-bus"
+ensure_bus_net() { docker network inspect "$BUS_NET" >/dev/null 2>&1 || docker network create "$BUS_NET" >/dev/null; }
+
+start_valkey() {
+  # The fleet message bus (docs/BUS.md) — a Valkey (BSD Redis) broker the loops
+  # publish/subscribe through, on the shared `fleet-bus` network (reached by name,
+  # `redis://discobot-valkey:6379`). Also published to the mini's LOOPBACK for
+  # host-side debugging (redis-cli / the discokit.bus CLI). Data volume keeps
+  # streams across restarts; a bus outage just degrades consumers to direct
+  # polling. Ownership moves to the fleet supervisor's REGISTRY when that lands.
+  ensure_bus_net
+  docker rm -f discobot-valkey >/dev/null 2>&1 || true
+  docker run -d --name discobot-valkey --restart unless-stopped \
+    --network "$BUS_NET" \
+    -p 127.0.0.1:6379:6379 \
+    -v discobot-valkey-data:/data \
+    valkey/valkey:8-alpine valkey-server --save 60 1000 --appendonly no >/dev/null
+  echo "started discobot-valkey (fleet message bus; network $BUS_NET + loopback :6379; data in volume discobot-valkey-data)"
+}
+
 start_digest() {
   local url token org webhook
   url="$(dotget "$ASKDASH_ENV" INFLUX_URL)"; url="${url:-http://localhost:8086}"
@@ -195,11 +220,14 @@ start_live() {
   [ -n "$token" ]     || { echo "live: INFLUX_READ_TOKEN missing in ask-dash/.env" >&2; return 1; }
   [ -n "$webhook" ]   || { echo "live: no DISCORD_WEBHOOK_OPS/URL in grafana/.env" >&2; return 1; }
   [ -d "$cache_dir" ] || { echo "live: $cache_dir not found on host" >&2; return 1; }
+  ensure_bus_net
   docker rm -f discobot-live >/dev/null 2>&1 || true
   docker run -d --name discobot-live "${common_run[@]}" \
+    --network "$BUS_NET" \
     -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
     -e "INFLUXDB_URL=$url" -e "INFLUXDB_TOKEN=$token" -e "INFLUXDB_ORG=$org" \
     -e "DISCORD_WEBHOOK_URL=$webhook" \
+    -e "BUS_URL=redis://discobot-valkey:6379" \
     -e "OPS_DASH_STATE=/state/dashboard/ops.json" \
     -e "LOOP_DASH_STATE=/state/loop/loop.json" \
     -e "EMBED_DASH_STATE=/state/embed/embed.json" \
@@ -279,13 +307,14 @@ start_embed() {
 }
 
 bots=("$@")
-# Default set: `live` replaces the three standalone dashboard daemons
-# (dashboard/loop/embed), and `transit-panel` (one edited #transit message)
-# replaces `transit` (the per-alert firehose). Both replaced daemons stay
-# start-able by name for rollback.
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher opswatcher transit-panel skills live)
+# Default set: `valkey` (the message bus) comes up first so `live` finds it;
+# `live` replaces the three standalone dashboard daemons (dashboard/loop/embed),
+# and `transit-panel` (one edited #transit message) replaces `transit` (the
+# per-alert firehose). All replaced daemons stay start-able by name for rollback.
+[ ${#bots[@]} -eq 0 ] && bots=(valkey digest github watcher opswatcher transit-panel skills live)
 for b in "${bots[@]}"; do
   case "$b" in
+    valkey)    start_valkey ;;
     digest)    start_digest ;;
     github)    start_github ;;
     watcher)   start_watcher ;;
