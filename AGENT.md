@@ -48,6 +48,7 @@ injected into their system prompt at launch). At runtime: `pwd`, and
 | `dev-dev` | #dev | `/Volumes/dev` | **General / roam** — many repos here; `cd` into the right one |
 | `ops` | #ops | `~/.claude/channels/discord-ops/workspace` | **`discobots`** — ops bots under `ops/` |
 | `maps` | #maps | `~/.claude/channels/discord-maps/workspace` | **`discobots`** — MapBot under `maps/` |
+| `models` | #models | `~/.claude/channels/discord-models/workspace` | **`discobots`** — ModelBot under `channels/models/` (drives `tommybot model`) |
 | `obsidian` | #obsidian | `~/.claude/channels/discord-obsidian/workspace` | **Obsidian vault** (Obsidian-Sync, *not* git) + `obsidian-automations` for code |
 | `camp` | #camp | `/Volumes/dev` | **General / roam** |
 | `trips` | #trips | `/Volumes/dev` | **General / roam** |
