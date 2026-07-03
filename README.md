@@ -53,6 +53,10 @@ tommybot (the MLX Obsidian-RAG bot) deliberately stays a bare-metal `launchd` pr
 host (`com.tommybot.bot-mini`, on the mini since 2026-07-01) — MLX needs Apple Metal, which a
 Linux container can't reach. Only the network-bound automations are containerized here.
 
+The shared plumbing under the bots — the **Valkey message bus** (declared as IaC in
+`dev/infra/valkey`), the **InfluxDB** store, the **supervisor** scheduler — plus a **live
+uptime readout** are documented in [`docs/infrastructure.md`](./docs/infrastructure.md).
+
 ## Operating it (from the Air)
 
 The repo-root [`justfile`](./justfile) is the control plane. Every recipe runs over
