@@ -16,9 +16,13 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import httpx
-from google.transit import gtfs_realtime_pb2
+# httpx and the GTFS-Realtime protobuf are imported lazily inside the functions
+# that touch the network/feed, so importers that only want the watched-route
+# table + palette (e.g. transit_dashboard, tests) need neither installed.
+if TYPE_CHECKING:  # annotations only; the real import is lazy at the call sites
+    import httpx
 
 # discokit (the package) sits next to this file, in ops/ — and flat in /app
 # inside the container. Put that dir on the path either way.
@@ -145,6 +149,9 @@ def fetch_alerts(client: httpx.Client, agency: str) -> list[dict]:
 
     Each returned dict: {id, header, description, effect, cause, url, routes}.
     """
+    import httpx
+    from google.transit import gtfs_realtime_pb2
+
     url = f"{OBA_GTFS_RT_BASE}/alerts-for-agency/{agency}.pb"
     params = {"key": _get_oba_api_key()}
     try:
@@ -278,6 +285,8 @@ def _state_entry(alert: dict, first_seen: float | None = None) -> dict:
 
 
 def run(dry: bool = False) -> None:
+    import httpx
+
     webhook_url = config.webhook()
     if not webhook_url and not dry:
         print("[error] No DISCORD_WEBHOOK_URL configured.", file=sys.stderr)

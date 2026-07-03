@@ -29,12 +29,15 @@ supervised `service` — on the mini today (`discobot-valkey`, loopback-only), a
 it belongs in the fleet supervisor's `REGISTRY` when that lands (supervision
 integrates upward; execution stays each loop's own process).
 
-- **Connection:** `BUS_URL` (or `DISCOBOTS_BUS_URL`), e.g.
-  `redis://host.docker.internal:6379` for a mini container, or
-  `redis://<tailscale-ip>:6379` from the Air. Unset ⇒ the bus is disabled and
-  everything degrades to direct polling.
-- **Privacy:** bound to loopback on the mini for now; tailnet exposure (for
-  tommybot on the Air) is a documented follow-on, never a public bind.
+- **Connection:** `BUS_URL` (or `DISCOBOTS_BUS_URL`). Containers share an
+  external Docker network (`fleet-bus`) and address the broker by **name** —
+  `redis://discobot-valkey:6379` (a loopback-published host port isn't reachable
+  cross-container). The mini's supervisor compose joins the same external
+  network. From the Air it'd be `redis://<tailscale-ip>:6379`. Unset ⇒ the bus
+  is disabled and everything degrades to direct polling.
+- **Privacy:** the broker lives on the private `fleet-bus` network with no public
+  bind (a loopback port is also published for host-side `redis-cli` debugging).
+  Tailnet exposure (for tommybot on the Air) is a documented follow-on.
 
 ## Envelope
 

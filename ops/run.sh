@@ -41,19 +41,29 @@ hostify() { sed -e "s#//localhost#//$HOSTGW#g" -e "s#//127\.0\.0\.1#//$HOSTGW#g"
 
 common_run=(--restart unless-stopped --add-host "$HOSTGW:host-gateway" -e "TZ=$TZ_VAL")
 
+# The shared bus network: bus producers/consumers (valkey, live) join it and
+# address the broker by container name — a loopback-published port isn't
+# reachable cross-container, so a user-defined network + DNS is the private,
+# no-exposure way. Idempotent; the obsidian-automations supervisor compose joins
+# the SAME external network (fleet-bus) to reach discobot-valkey by name.
+BUS_NET="fleet-bus"
+ensure_bus_net() { docker network inspect "$BUS_NET" >/dev/null 2>&1 || docker network create "$BUS_NET" >/dev/null; }
+
 start_valkey() {
   # The fleet message bus (docs/BUS.md) — a Valkey (BSD Redis) broker the loops
-  # publish/subscribe through. Bound to the mini's LOOPBACK only (private by
-  # default); containers reach it via host.docker.internal:6379 (BUS_URL, injected
-  # into discobot-live below). Data volume keeps streams across restarts; a bus
-  # outage just degrades consumers to direct polling, so this is best-effort.
-  # Ownership moves to the fleet supervisor's REGISTRY when that lands.
+  # publish/subscribe through, on the shared `fleet-bus` network (reached by name,
+  # `redis://discobot-valkey:6379`). Also published to the mini's LOOPBACK for
+  # host-side debugging (redis-cli / the discokit.bus CLI). Data volume keeps
+  # streams across restarts; a bus outage just degrades consumers to direct
+  # polling. Ownership moves to the fleet supervisor's REGISTRY when that lands.
+  ensure_bus_net
   docker rm -f discobot-valkey >/dev/null 2>&1 || true
   docker run -d --name discobot-valkey --restart unless-stopped \
+    --network "$BUS_NET" \
     -p 127.0.0.1:6379:6379 \
     -v discobot-valkey-data:/data \
     valkey/valkey:8-alpine valkey-server --save 60 1000 --appendonly no >/dev/null
-  echo "started discobot-valkey (fleet message bus; loopback :6379; data in volume discobot-valkey-data)"
+  echo "started discobot-valkey (fleet message bus; network $BUS_NET + loopback :6379; data in volume discobot-valkey-data)"
 }
 
 start_digest() {
@@ -75,8 +85,12 @@ start_digest() {
 }
 
 start_github() {
+  # Prefer a dedicated #github webhook (DISCORD_WEBHOOK_GITHUB) so PR events land
+  # in #github instead of the shared #ops feed; falls back to the general webhook
+  # (→ #ops, today's behaviour) until that key exists in grafana/.env.
   local webhook ghtoken
-  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)"
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_GITHUB)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
   ghtoken="$(gh auth token 2>/dev/null || true)"
   [ -n "$webhook" ] || { echo "github: DISCORD_WEBHOOK_URL missing in grafana/.env" >&2; return 1; }
   [ -n "$ghtoken" ] || { echo "github: \`gh auth token\` empty — run \`gh auth login\` on the mini" >&2; return 1; }
@@ -89,15 +103,37 @@ start_github() {
 }
 
 start_watcher() {
+  # Prefer the dedicated #ops-watcher webhook so state-change alerts live in
+  # #ops-watcher (with the opswatcher status panel) instead of the shared #ops
+  # feed; falls back to the general webhook until DISCORD_WEBHOOK_OPSWATCHER exists.
   local webhook
-  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)"
-  [ -n "$webhook" ] || { echo "watcher: DISCORD_WEBHOOK_URL missing in grafana/.env" >&2; return 1; }
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_OPSWATCHER)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  [ -n "$webhook" ] || { echo "watcher: no DISCORD_WEBHOOK_OPSWATCHER/URL in grafana/.env" >&2; return 1; }
   docker rm -f discobot-watcher >/dev/null 2>&1 || true
   docker run -d --name discobot-watcher "${common_run[@]}" \
     -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
     -e "DISCORD_WEBHOOK_URL=$webhook" \
     discobot-watcher:latest >/dev/null
   echo "started discobot-watcher (daemon, polls dev-status)"
+}
+
+start_opswatcher() {
+  # The #ops-watcher live status panel: ONE dev-status message edited in place,
+  # replacing the retired legacy launchd watcher's ~278/day of discrete up/down
+  # posts. Reuses the ops_dashboard image (discobot-dashboard) pointed at the
+  # dedicated #ops-watcher webhook + its own state volume. Requires
+  # DISCORD_WEBHOOK_OPSWATCHER in grafana/.env (the existing #ops-watcher webhook).
+  local webhook
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_OPSWATCHER)"
+  [ -n "$webhook" ] || { echo "opswatcher: DISCORD_WEBHOOK_OPSWATCHER missing in grafana/.env" >&2; return 1; }
+  docker rm -f discobot-opswatcher >/dev/null 2>&1 || true
+  docker run -d --name discobot-opswatcher "${common_run[@]}" \
+    -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
+    -e "DISCORD_WEBHOOK_OPS=$webhook" \
+    -v discobot-opswatcher-state:/state \
+    discobot-dashboard:latest >/dev/null
+  echo "started discobot-opswatcher (daemon; edits one #ops-watcher message in place; state in volume discobot-opswatcher-state)"
 }
 
 start_transit() {
@@ -115,6 +151,33 @@ start_transit() {
     -e "OBA_API_KEY=$oba" -e "DISCORD_WEBHOOK_URL=$webhook" \
     discobot-transit:latest >/dev/null
   echo "started discobot-transit (every 5 min)"
+}
+
+start_transit_panel() {
+  # The #transit live status panel: ONE message edited in place (a chip row per
+  # watched line, 🟢/🟡/🟠/🔴 by worst active effect) instead of transit_discord's
+  # fresh FIRING/Cleared post per alert (the loudest feed in the guild, ~62/day).
+  # Reuses the discobot-transit image (same OBA + gtfs deps), overriding the
+  # command to run the panel daemon. Same #transit webhook + OBA key as the
+  # alert notifier; the message id + content signature persist in the named
+  # volume discobot-transit-panel-state. Cutover: once this is proven, drop
+  # `transit` from the default set so the panel is the channel's sole voice;
+  # rollback is `ops/run.sh transit` (the per-alert notifier).
+  local webhook oba
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_TRANSIT)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  oba="$(grep -E '^[[:space:]]*oba_api_key:' "$TRANSIT_SVC" 2>/dev/null | head -1 \
+        | sed -E 's/^[[:space:]]*oba_api_key:[[:space:]]*//; s/[[:space:]]*(#.*)?$//; s/^["'\'']//; s/["'\'']$//')"
+  [ -n "$oba" ] && [ "$oba" != "TEST" ] || { echo "transit-panel: no real oba_api_key in $TRANSIT_SVC" >&2; return 1; }
+  [ -n "$webhook" ] || { echo "transit-panel: no DISCORD_WEBHOOK_TRANSIT/URL in grafana/.env" >&2; return 1; }
+  docker rm -f discobot-transit-panel >/dev/null 2>&1 || true
+  docker run -d --name discobot-transit-panel "${common_run[@]}" \
+    -e "OBA_API_KEY=$oba" -e "DISCORD_WEBHOOK_TRANSIT=$webhook" \
+    -e "TRANSIT_DASH_STATE=/state/transit.json" \
+    -v discobot-transit-panel-state:/state \
+    discobot-transit:latest \
+    python3 /app/transit_dashboard.py --interval 60 --iterations 0 >/dev/null
+  echo "started discobot-transit-panel (daemon; edits one #transit message in place; state in volume discobot-transit-panel-state)"
 }
 
 start_skills() {
@@ -157,12 +220,14 @@ start_live() {
   [ -n "$token" ]     || { echo "live: INFLUX_READ_TOKEN missing in ask-dash/.env" >&2; return 1; }
   [ -n "$webhook" ]   || { echo "live: no DISCORD_WEBHOOK_OPS/URL in grafana/.env" >&2; return 1; }
   [ -d "$cache_dir" ] || { echo "live: $cache_dir not found on host" >&2; return 1; }
+  ensure_bus_net
   docker rm -f discobot-live >/dev/null 2>&1 || true
   docker run -d --name discobot-live "${common_run[@]}" \
+    --network "$BUS_NET" \
     -e "DEV_STATUS_URL=http://$HOSTGW:8077" \
     -e "INFLUXDB_URL=$url" -e "INFLUXDB_TOKEN=$token" -e "INFLUXDB_ORG=$org" \
     -e "DISCORD_WEBHOOK_URL=$webhook" \
-    -e "BUS_URL=redis://$HOSTGW:6379" \
+    -e "BUS_URL=redis://discobot-valkey:6379" \
     -e "OPS_DASH_STATE=/state/dashboard/ops.json" \
     -e "LOOP_DASH_STATE=/state/loop/loop.json" \
     -e "EMBED_DASH_STATE=/state/embed/embed.json" \
@@ -244,20 +309,23 @@ start_embed() {
 bots=("$@")
 # Default set: `valkey` (the message bus) comes up first so `live` finds it;
 # `live` replaces the three standalone dashboard daemons (dashboard/loop/embed),
-# which remain start-able by name for rollback.
-[ ${#bots[@]} -eq 0 ] && bots=(valkey digest github watcher transit skills live)
+# and `transit-panel` (one edited #transit message) replaces `transit` (the
+# per-alert firehose). All replaced daemons stay start-able by name for rollback.
+[ ${#bots[@]} -eq 0 ] && bots=(valkey digest github watcher opswatcher transit-panel skills live)
 for b in "${bots[@]}"; do
   case "$b" in
     valkey)    start_valkey ;;
     digest)    start_digest ;;
     github)    start_github ;;
     watcher)   start_watcher ;;
+    opswatcher) start_opswatcher ;;
     transit)   start_transit ;;
+    transit-panel) start_transit_panel ;;
     skills)    start_skills ;;
     live)      start_live ;;
     dashboard) start_dashboard ;;
     loop)      start_loop ;;
     embed)     start_embed ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills|dashboard|loop|embed)" >&2; exit 2 ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|opswatcher|transit|transit-panel|skills|live|dashboard|loop|embed)" >&2; exit 2 ;;
   esac
 done
