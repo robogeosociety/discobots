@@ -11,6 +11,8 @@ Operates on:
   skills: ~/.claude/skills (global, all sessions) + <cwd>/.claude/skills (per-session)
 
   fleet ls                                overview of every session
+  fleet session create <name> [opts]      wire up a NEW channel session (dir + access.json + roster row)
+                                          opts: --cwd DIR --model MODEL --effort low|medium|high --emoji E
   fleet session set-cwd <name> <dir>      repoint a session's working dir   (backup + zsh -n)
   fleet session set-model <name> <model>  pin/unpin a session's model       (backup + zsh -n; '-' clears)
   fleet session restart <name>            restart it (nomad restart-maclaude, else tmux kill → babysitter)
@@ -33,9 +35,15 @@ from datetime import datetime
 from pathlib import Path
 
 HOME = Path.home()
-ENSURE = HOME / ".local/share/claude-channels/ensure-sessions.sh"
-CHANNELS = HOME / ".claude/channels"
+# Production defaults are unchanged; the two env overrides exist ONLY so a hermetic test can point
+# the roster script + channel-state tree at a tmp dir (see ops/tests/test_fleet.py). Unset in prod.
+ENSURE = Path(os.environ.get("FLEET_ENSURE_FILE") or HOME / ".local/share/claude-channels/ensure-sessions.sh")
+CHANNELS = Path(os.environ.get("CLAUDE_CHANNELS_DIR") or HOME / ".claude/channels")
 SKILLS_GLOBAL = HOME / ".claude/skills"
+
+# Tommy's Discord user id — the sole allowlisted sender a fresh session trusts (per-channel bots
+# start locked to him; widen later via `fleet alias`/manual access.json edits).
+TOMMY_DISCORD_ID = "1382748563355734127"
 
 
 # ── parse ensure-sessions.sh ─────────────────────────────────────────────────────
@@ -60,14 +68,23 @@ def projects(text: str | None = None) -> list[dict]:
     return out
 
 
-def models(text: str | None = None) -> dict[str, str]:
-    """{session: model} from SESSION_MODEL=( a x b y )."""
-    text = text if text is not None else _ensure_text()
-    m = re.search(r"SESSION_MODEL=\(([^)]*)\)", text)
+def _assoc(name: str, text: str) -> dict[str, str]:
+    """{session: value} from an assoc array literal NAME=( a x b y )."""
+    m = re.search(rf"{name}=\(([^)]*)\)", text)
     if not m:
         return {}
     toks = m.group(1).split()
     return dict(zip(toks[::2], toks[1::2], strict=False))
+
+
+def models(text: str | None = None) -> dict[str, str]:
+    """{session: model} from SESSION_MODEL=( a x b y )."""
+    return _assoc("SESSION_MODEL", text if text is not None else _ensure_text())
+
+
+def effort(text: str | None = None) -> dict[str, str]:
+    """{session: effort} from SESSION_EFFORT=( a x b y )."""
+    return _assoc("SESSION_EFFORT", text if text is not None else _ensure_text())
 
 
 def _find(name: str) -> dict:
@@ -95,11 +112,15 @@ def _write_ensure(new_text: str, tag: str) -> None:
 
 
 # ── per-channel access.json (alias / emoji) ──────────────────────────────────────
-def _access_path(name: str) -> Path:
-    state = Path(_find(name)["state"])  # DISCORD_STATE_DIR; honour ~ etc.
-    return (
-        Path(os.path.expanduser(str(state).replace("$HOME", str(HOME)))) / "access.json"
-    )
+def _expand_state(state: str) -> Path:
+    """Resolve a DISCORD_STATE_DIR string (may hold $HOME / ~) to a real path."""
+    return Path(os.path.expanduser(str(state).replace("$HOME", str(HOME))))
+
+
+def _access_path(name: str, state: str | None = None) -> Path:
+    # `create` passes the state dir explicitly (no roster row yet); everyone else derives it.
+    st = state if state is not None else _find(name)["state"]
+    return _expand_state(st) / "access.json"
 
 
 def _edit_access(name: str, key: str, value) -> None:
@@ -152,6 +173,116 @@ def cmd_ls(_a) -> None:
         )
 
 
+def _new_access(name: str, chat_id: str | None, emoji: str | None) -> dict:
+    """A locked-down access.json for a brand-new session, mirroring an existing one's shape
+    (dmPolicy / allowFrom / groups / pending / mentionPatterns / ackReaction). Tommy is the sole
+    allowFrom; if we already know the channel id it's pre-seeded as a require-mention group."""
+    groups = {}
+    if chat_id:
+        groups[chat_id] = {"requireMention": True, "allowFrom": [TOMMY_DISCORD_ID]}
+    return {
+        "dmPolicy": "allowlist",
+        "allowFrom": [TOMMY_DISCORD_ID],
+        "groups": groups,
+        "pending": {},
+        # @name / @<name>bot so the bot answers to its own name in-channel.
+        "mentionPatterns": [name, f"{name}bot"],
+        "ackReaction": emoji or "",
+    }
+
+
+def _repo_channel_dir(name: str) -> Path:
+    """channels/<name>/ in the current repo checkout (cwd = the mini repo when run via `just fleet`)."""
+    return Path.cwd() / "channels" / name
+
+
+def _deploy_workspace(name: str, workspace: Path) -> str:
+    """Seed the session workspace from the repo's channels/<name>/ tracked files, honouring its
+    .gitignore. Returns a human note for the summary. No-op (with a note) if the dir is absent."""
+    src = _repo_channel_dir(name)
+    if not src.is_dir():
+        return f"no channels/{name}/ in the repo — workspace left empty (add sources later, then re-deploy)"
+    cmd = ["rsync", "-a"]
+    gi = src / ".gitignore"
+    if gi.is_file():
+        cmd += ["--exclude-from", str(gi)]
+    cmd += ["--exclude", ".git", f"{src}/", f"{workspace}/"]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        return f"workspace deploy FAILED (rsync: {r.stderr.strip()[:120]}) — copy channels/{name}/ in by hand"
+    return f"deployed channels/{name}/ → {workspace} (respecting .gitignore)"
+
+
+def cmd_session_create(a) -> None:
+    name = a.name
+    text = _ensure_text()
+
+    # 1. Guard idempotently — never partially wire an already-known session.
+    if any(p["name"] == name for p in projects(text)):
+        sys.exit(f"fleet: session '{name}' already exists in DISCORD_PROJECTS — nothing to do")
+    if "DISCORD_PROJECTS=(" not in text:
+        sys.exit("fleet: DISCORD_PROJECTS array not found in ensure-sessions.sh — aborted")
+
+    state_dir = CHANNELS / f"discord-{name}"
+    workspace = Path(a.cwd) if a.cwd else state_dir / "workspace"
+
+    # 2. Scaffold the channel state dir + workspace. chmod explicitly (mkdir's mode is umask-masked,
+    #    and a no-op on an already-existing dir) so the private state tree is 700 regardless.
+    state_dir.mkdir(parents=True, exist_ok=True)
+    workspace.mkdir(parents=True, exist_ok=True)
+    if not a.cwd:  # only lock down the dirs we own; a caller-supplied --cwd is left as-is
+        state_dir.chmod(0o700)
+        workspace.chmod(0o700)
+
+    # 3. Write access.json (reuse _access_path with the explicit state dir — no roster row yet).
+    ap = _access_path(name, str(state_dir))
+    ap.write_text(json.dumps(_new_access(name, chat_id=None, emoji=a.emoji), indent=2))
+
+    # 4. Roster row + optional model/effort pins — one format-preserving, syntax-checked write.
+    #    Row uses $HOME/… (matches the file's own dev-dev/home entries) unless --cwd is absolute.
+    if a.cwd:
+        cwd_field = a.cwd
+    else:
+        cwd_field = f"$HOME/.claude/channels/discord-{name}/workspace"
+    state_field = f"$HOME/.claude/channels/discord-{name}"
+    row = f'  "{name}|{cwd_field}|{state_field}"\n'
+    new_text = re.sub(
+        r"(DISCORD_PROJECTS=\(\s*\n.*?)(\n\)\n)",
+        lambda m: m.group(1) + "\n" + row.rstrip("\n") + m.group(2),
+        text,
+        count=1,
+        flags=re.DOTALL,
+    )
+    if new_text == text:
+        sys.exit("fleet: couldn't locate the DISCORD_PROJECTS closing paren to append the row — aborted")
+    if a.model:
+        new_text = _set_assoc_text(new_text, "SESSION_MODEL", name, a.model)
+    if a.effort:
+        new_text = _set_assoc_text(new_text, "SESSION_EFFORT", name, a.effort)
+    _write_ensure(new_text, f"create-{name}")
+
+    # 5. Deploy the workspace from the repo (if channels/<name>/ exists).
+    deploy_note = _deploy_workspace(name, workspace)
+
+    # 6. Summary + the one irreducibly-manual step (Discord app creation is a UI action).
+    env_path = state_dir / ".env"
+    pins = []
+    if a.model:
+        pins.append(f"model={a.model}")
+    if a.effort:
+        pins.append(f"effort={a.effort}")
+    print(f"\nfleet: session '{name}' wired up:")
+    print(f"  • state dir   {state_dir}")
+    print(f"  • workspace   {workspace}")
+    print(f"  • access.json {ap}  (allowFrom Tommy; ackReaction={a.emoji or '—'})")
+    print(f"  • roster row  \"{name}|{cwd_field}|{state_field}\"" + (f"  [{', '.join(pins)}]" if pins else ""))
+    print(f"  • workspace   {deploy_note}")
+    print("\n  MANUAL (can't be automated — Discord UI): create a Discord app + bot, invite it to")
+    print(f"  #{name}, and save its token to {env_path} as")
+    print("      DISCORD_BOT_TOKEN=…    (chmod 600)")
+    print(f"  Then the babysitter starts the session within ~2 min, or run `just fleet session restart {name}`.")
+
+
 def cmd_session_set_cwd(a) -> None:
     p = _find(a.name)
     text = _ensure_text()
@@ -164,23 +295,27 @@ def cmd_session_set_cwd(a) -> None:
     _write_ensure(text.replace(old, new, 1), f"cwd-{a.name}")
 
 
+def _set_assoc_text(text: str, array: str, name: str, value: str | None) -> str:
+    """Return `text` with `name`→`value` set (or removed when value is falsy) inside the
+    zsh assoc array `array=( … )`. Format-preserving, single-line rewrite. Requires the array
+    to already exist in the file."""
+    m = re.search(rf"{array}=\(([^)]*)\)", text)
+    if not m:
+        sys.exit(f"fleet: {array} array not found in ensure-sessions.sh")
+    cur = _assoc(array, text)
+    if value:
+        cur[name] = value
+    else:
+        cur.pop(name, None)
+    body = " ".join(f"{k} {v}" for k, v in cur.items())
+    return text.replace(m.group(0), f"{array}=( {body} )" if body else f"{array}=( )", 1)
+
+
 def cmd_session_set_model(a) -> None:
     _find(a.name)
-    text = _ensure_text()
-    m = re.search(r"SESSION_MODEL=\(([^)]*)\)", text)
-    if not m:
-        sys.exit("fleet: SESSION_MODEL array not found")
-    cur = models(text)
-    if a.model in ("-", "default", ""):
-        cur.pop(a.name, None)
-    else:
-        cur[a.name] = a.model
-    body = " ".join(f"{k} {v}" for k, v in cur.items())
+    val = None if a.model in ("-", "default", "") else a.model
     _write_ensure(
-        text.replace(
-            m.group(0), f"SESSION_MODEL=( {body} )" if body else "SESSION_MODEL=( )", 1
-        ),
-        f"model-{a.name}",
+        _set_assoc_text(_ensure_text(), "SESSION_MODEL", a.name, val), f"model-{a.name}"
     )
 
 
@@ -266,6 +401,13 @@ def main() -> None:
     sub.add_parser("ls").set_defaults(fn=cmd_ls)
 
     s = sub.add_parser("session").add_subparsers(dest="op", required=True)
+    sc = s.add_parser("create", help="wire up a new channel session (dir + access.json + roster row)")
+    sc.add_argument("name")
+    sc.add_argument("--cwd", help="working dir (default: <state>/workspace)")
+    sc.add_argument("--model", help="pin SESSION_MODEL (e.g. claude-sonnet-5)")
+    sc.add_argument("--effort", choices=("low", "medium", "high"), help="pin SESSION_EFFORT")
+    sc.add_argument("--emoji", help="ackReaction emoji for the channel")
+    sc.set_defaults(fn=cmd_session_create)
     _arg(s.add_parser("set-cwd"), "name", "dir", fn=cmd_session_set_cwd)
     _arg(s.add_parser("set-model"), "name", "model", fn=cmd_session_set_model)
     _arg(s.add_parser("restart"), "name", fn=cmd_session_restart)

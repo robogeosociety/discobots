@@ -67,6 +67,7 @@ logs bot *flags:
 
 # Manage the Claude Code channel-session fleet (local config on the mini):
 #   just fleet ls
+#   just fleet session create <name> [--cwd D --model M --effort low|medium|high --emoji E]
 #   just fleet session set-cwd|set-model|restart <name> [arg]
 #   just fleet skill ls|link|unlink <name> [skill]
 #   just fleet emoji set <name> <emoji>   |   just fleet alias set <name> <pattern...>
