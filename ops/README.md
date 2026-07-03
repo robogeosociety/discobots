@@ -15,10 +15,12 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
 | **live** | `discobot-live` | daemon (one asyncio loop; 5 s / 30 s / 60 s / 5 min jobs) | dev-status `:8077`, InfluxDB `:8086`, host `~/Library/Caches/tommybot` (ro mount, DB + live.json), **the bus `:6379`**, Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
 | **valkey** | `discobot-valkey` | daemon (broker) | — (loopback `:6379`) | none — no secret; the fleet message bus (`docs/BUS.md`) |
+| **telemetry** | `discobot-telemetry` | daemon (bus consumer) — **opt-in** | the bus `:6379` | none — the DuckDB sink (`obsidian-automations#179`): drains `fleet.telemetry` → a retained `.db` |
 
 *(dashboard / loop / embed — the three standalone daemons `live` replaced — stay
 buildable + start-able by name for rollback, out of the default set. `valkey` starts
-first in the default set so `live` finds the bus.)*
+first in the default set so `live` finds the bus. `telemetry` is opt-in — built but
+not started by default; `just up telemetry` once a producer emits to `fleet.telemetry`.)*
 
 A container reaches the mini's localhost services (InfluxDB, dev-status) via
 `host.docker.internal`; `run.sh` rewrites `localhost`/`127.0.0.1` URLs accordingly.
@@ -98,6 +100,7 @@ sequence locally with no DB/Discord/deps.
 ops/
   digest.py  github_discord.py  transit_discord.py  watcher.py  skills_discord.py   # notifier bots
   live_service.py               # the inner loop: all #ops dashboards on ONE asyncio loop (daemon)
+  telemetry_sink.py             # the DuckDB telemetry sink (#179): drains fleet.telemetry off the bus
   ops_dashboard.py              # #ops status readout — job hosted by live (standalone = rollback)
   loop_dashboard.py             # #ops supervisor-loop ferris wheel — job hosted by live ("")
   embed_dashboard.py            # #ops embeddings-sync graph — job hosted by live ("")

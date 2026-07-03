@@ -75,6 +75,20 @@ wheel snapshot, exactly the shape `loop_dashboard.fetch_live` returns:
 Publish with `ttl≈180` (≫ the 60 s beat, so one missed tick doesn't blank the
 wheel, but a stopped supervisor expires the value → the wheel shows "stopped").
 
+### `fleet.telemetry` — event (durable stream) — **sink live (this PR)**
+Producer: any loop that wants a metric *persisted* — `emit("fleet.telemetry",
+{...})`. Consumer: the **DuckDB sink** (`ops/telemetry_sink.py`, group
+`duckdb-sink`) drains it into a local `.db` with a retention window, the storage
+half of obsidian-automations#179. `data` is free-form per producer; the
+envelope's `src`/`type`/`ts` are stored alongside.
+
+A producer that also wants a **live** readout publishes the retained telemetry
+topic *and* emits here — retained pub/sub feeds the real-time dashboard (no store
+round-trip), the stream feeds history/analytics. e.g. the supervisor may
+`publish("fleet.supervisor.tick", snap)` (the wheel) **and**
+`emit("fleet.telemetry", {"metric": "supervisor.tick", **snap})` (the sink).
+Real-time and retention are decoupled: neither is in the other's hot path.
+
 ### Planned (follow-on PRs — listed so producers can aim)
 - `fleet.tommybot.telemetry` — telemetry — bridge tommybot's `TOMMYBOT_LIVE_FILE`
   (live.md) onto the bus so the chat panel can subscribe instead of poll.

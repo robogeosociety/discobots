@@ -15,8 +15,9 @@ echo "==> discobot-base"
 docker build -f docker/base.Dockerfile -t discobot-base:latest .
 
 # live replaces dashboard/loop/embed in the default set; the three stay
-# buildable for rollback.
-for bot in digest github transit watcher skills live dashboard loop embed; do
+# buildable for rollback. telemetry (the DuckDB sink) is opt-in — built here,
+# started by name once a producer emits to fleet.telemetry.
+for bot in digest github transit watcher skills live dashboard loop embed telemetry; do
   echo "==> discobot-$bot"
   docker build -f "docker/$bot/Dockerfile" -t "discobot-$bot:latest" .
 done

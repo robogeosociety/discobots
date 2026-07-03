@@ -41,6 +41,22 @@ hostify() { sed -e "s#//localhost#//$HOSTGW#g" -e "s#//127\.0\.0\.1#//$HOSTGW#g"
 
 common_run=(--restart unless-stopped --add-host "$HOSTGW:host-gateway" -e "TZ=$TZ_VAL")
 
+start_telemetry() {
+  # The DuckDB telemetry sink (obsidian-automations#179): drains the
+  # fleet.telemetry stream off the bus into one DuckDB file in its state volume,
+  # with a retention window. Opt-in (not in the default set) — start it by name
+  # once a producer emits to fleet.telemetry. Reaches the bus via
+  # host.docker.internal:6379 (same as discobot-live).
+  docker rm -f discobot-telemetry >/dev/null 2>&1 || true
+  docker run -d --name discobot-telemetry "${common_run[@]}" \
+    -e "BUS_URL=redis://$HOSTGW:6379" \
+    -e "TELEMETRY_DB=/state/telemetry.duckdb" \
+    -e "TELEMETRY_RETENTION_DAYS=30" \
+    -v discobot-telemetry-data:/state \
+    discobot-telemetry:latest >/dev/null
+  echo "started discobot-telemetry (DuckDB sink; drains fleet.telemetry; db in volume discobot-telemetry-data)"
+}
+
 start_valkey() {
   # The fleet message bus (docs/BUS.md) — a Valkey (BSD Redis) broker the loops
   # publish/subscribe through. Bound to the mini's LOOPBACK only (private by
@@ -249,6 +265,7 @@ bots=("$@")
 for b in "${bots[@]}"; do
   case "$b" in
     valkey)    start_valkey ;;
+    telemetry) start_telemetry ;;
     digest)    start_digest ;;
     github)    start_github ;;
     watcher)   start_watcher ;;
