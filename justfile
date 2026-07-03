@@ -89,11 +89,30 @@ run-now bot:
 spotlight:
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-skills python /app/skills_discord.py --spotlight"
 
-# Refresh the pinned #ops fleet-status board from ops/fleet.toml (one-shot; edits the panel in place).
+# Refresh the pinned #discobots fleet-status board from ops/fleet.toml (one-shot; edits in place).
+# Normally CI/CD does this on every deploy (ops/autodeploy.sh); this is the manual repaint.
 # The wiki page is regenerated + published separately:
 #   python3 ops/fleet_status.py --markdown docs/fleet-status.md   (then commit + /wikime)
 fleet-status:
-    ssh {{mini_host}} 'export PATH=$HOME/.orbstack/bin:$PATH; env="$HOME/dev/observability/grafana/.env"; w=$(sed -n "s/^DISCORD_WEBHOOK_OPS=//p" "$env" | head -1); [ -n "$w" ] || w=$(sed -n "s/^DISCORD_WEBHOOK_URL=//p" "$env" | head -1); [ -n "$w" ] || { echo "fleet-status: no #ops webhook in grafana/.env" >&2; exit 1; }; docker run --rm -v discobot-fleet-status-state:/state -e DISCORD_WEBHOOK_OPS="$w" discobot-live:latest python3 /app/fleet_status.py --discord --state /state/fleet.json'
+    ssh {{mini_host}} 'export PATH=$HOME/.orbstack/bin:$PATH; env="$HOME/dev/observability/grafana/.env"; w=$(sed -n "s/^DISCORD_WEBHOOK_DISCOBOTS=//p" "$env" | head -1); [ -n "$w" ] || w=$(sed -n "s/^DISCORD_WEBHOOK_OPS=//p" "$env" | head -1); [ -n "$w" ] || w=$(sed -n "s/^DISCORD_WEBHOOK_URL=//p" "$env" | head -1); [ -n "$w" ] || { echo "fleet-status: no #discobots/#ops webhook in grafana/.env" >&2; exit 1; }; docker run --rm -v discobot-fleet-status-state:/state -e DISCORD_WEBHOOK_DISCOBOTS="$w" discobot-live:latest python3 /app/fleet_status.py --discord --state /state/fleet.json'
+
+# --- CD: the mini-side auto-deploy poller (ops/autodeploy.sh) ---------------
+
+# Install + load the CD poller on the mini (launchd, every 2 min): ff-merge main,
+# rebuild, restart bots, repaint the #discobots board. Templates $HOME into the plist.
+autodeploy-install:
+    ssh {{mini_host}} 'set -e; export PATH=$HOME/.orbstack/bin:$PATH; p="$HOME/Library/LaunchAgents/com.discobots.autodeploy.plist"; sed "s#/Volumes/dev/discobots#{{mini_repo}}#g" {{mini_repo}}/ops/deploy/com.discobots.autodeploy.plist > "$p"; chmod +x {{mini_repo}}/ops/autodeploy.sh; launchctl bootout gui/$(id -u)/com.discobots.autodeploy 2>/dev/null || true; launchctl bootstrap gui/$(id -u) "$p"; echo "installed com.discobots.autodeploy (StartInterval 120s); log: /tmp/discobots-autodeploy.log"'
+
+# Tail the CD poller log; `just autodeploy-status` shows the launchd job state.
+autodeploy-log:
+    ssh {{mini_host}} 'tail -n 40 /tmp/discobots-autodeploy.log 2>/dev/null || echo "(no log yet — the poller has not fired)"'
+
+autodeploy-status:
+    ssh {{mini_host}} 'launchctl print gui/$(id -u)/com.discobots.autodeploy 2>/dev/null | grep -E "state|last exit|program" || echo "com.discobots.autodeploy not loaded — run \`just autodeploy-install\`"'
+
+# Remove the CD poller from the mini.
+autodeploy-uninstall:
+    ssh {{mini_host}} 'launchctl bootout gui/$(id -u)/com.discobots.autodeploy 2>/dev/null; rm -f "$HOME/Library/LaunchAgents/com.discobots.autodeploy.plist"; echo "removed com.discobots.autodeploy"'
 
 # Dry-run a periodic bot once (no Discord post) — handy after a deploy.
 # (Bots differ: digest uses --dry-run, github/transit use --dry.)

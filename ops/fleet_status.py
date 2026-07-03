@@ -155,9 +155,10 @@ def render_markdown(inv: dict) -> str:
     out.append(f"_{meta.get('tagline', '')}_")
     out.append("")
     out.append(
-        "> This page is generated from `ops/fleet.toml` and mirrors the pinned **#ops** "
-        "Discord panel. The live telemetry is in Discord — **#ops** (loop + supervisor), "
-        "**#ops-watcher** (dev status), **#transit** (lines). This board is the directory."
+        "> This page is generated from `ops/fleet.toml` and mirrors the pinned **#discobots** "
+        "Discord panel (refreshed by CI/CD on every deploy). The live telemetry is elsewhere in "
+        "Discord — **#ops** (loop + supervisor), **#ops-watcher** (dev status), **#transit** "
+        "(lines). This board is the directory."
     )
     out.append("")
 
@@ -244,9 +245,10 @@ def render_markdown(inv: dict) -> str:
         "2. `python3 ops/fleet_status.py --markdown docs/fleet-status.md` — regenerate this page (a test asserts it matches)."
     )
     out.append(
-        "3. `just fleet-status` — repost/edit the pinned #ops panel from the same file."
+        "3. Commit + merge — CI/CD ships it: the mini's autodeploy poller repaints the pinned "
+        "**#discobots** panel from the same file (or run `just fleet-status` to repaint it now)."
     )
-    out.append("4. Commit; `/wikime` publishes this page to the dev wiki.")
+    out.append("4. `/wikime` publishes this page to the dev wiki.")
     out.append("")
     out.append(
         "_Generated from `ops/fleet.toml` by `ops/fleet_status.py` — do not hand-edit._"
@@ -257,10 +259,10 @@ def render_markdown(inv: dict) -> str:
 # ── CLI ─────────────────────────────────────────────────────────────────────
 def main() -> None:
     ap = argparse.ArgumentParser(
-        description="the #ops fleet-status board (one source → panel + wiki page)"
+        description="the #discobots fleet-status board (one source → panel + wiki page)"
     )
     ap.add_argument(
-        "--discord", action="store_true", help="create/edit the pinned #ops panel"
+        "--discord", action="store_true", help="create/edit the pinned #discobots panel"
     )
     ap.add_argument(
         "--markdown",
@@ -287,10 +289,12 @@ def main() -> None:
         print(f"[fleet_status] wrote {path}")
 
     if args.discord or args.all:
-        url = config.webhook("OPS")
+        # #discobots is the board's home; the shell wrappers (just fleet-status /
+        # autodeploy.sh) resolve DISCOBOTS→OPS→URL and pass DISCORD_WEBHOOK_DISCOBOTS.
+        url = config.webhook("DISCOBOTS")
         if not args.dry and not url:
             print(
-                "[fleet_status] no DISCORD_WEBHOOK_OPS / DISCORD_WEBHOOK_URL found",
+                "[fleet_status] no DISCORD_WEBHOOK_DISCOBOTS / DISCORD_WEBHOOK_URL found",
                 file=sys.stderr,
             )
             sys.exit(1)

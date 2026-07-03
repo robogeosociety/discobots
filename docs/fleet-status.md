@@ -2,7 +2,7 @@
 
 _the Discord agent fleet — bots, collectors, data, graphs_
 
-> This page is generated from `ops/fleet.toml` and mirrors the pinned **#ops** Discord panel. The live telemetry is in Discord — **#ops** (loop + supervisor), **#ops-watcher** (dev status), **#transit** (lines). This board is the directory.
+> This page is generated from `ops/fleet.toml` and mirrors the pinned **#discobots** Discord panel (refreshed by CI/CD on every deploy). The live telemetry is elsewhere in Discord — **#ops** (loop + supervisor), **#ops-watcher** (dev status), **#transit** (lines). This board is the directory.
 
 ## 🤖 Discord ops bots
 
@@ -63,7 +63,7 @@ memory · mini free %  ▄▅▆▇██▇▅▄▂▁▁▁▂▃▄▅▆▇
 
 1. Edit `ops/fleet.toml`.
 2. `python3 ops/fleet_status.py --markdown docs/fleet-status.md` — regenerate this page (a test asserts it matches).
-3. `just fleet-status` — repost/edit the pinned #ops panel from the same file.
-4. Commit; `/wikime` publishes this page to the dev wiki.
+3. Commit + merge — CI/CD ships it: the mini's autodeploy poller repaints the pinned **#discobots** panel from the same file (or run `just fleet-status` to repaint it now).
+4. `/wikime` publishes this page to the dev wiki.
 
 _Generated from `ops/fleet.toml` by `ops/fleet_status.py` — do not hand-edit._

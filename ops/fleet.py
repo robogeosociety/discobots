@@ -263,6 +263,9 @@ def cmd_session_create(a) -> None:
 
     # 5. Deploy the workspace from the repo (if channels/<name>/ exists).
     deploy_note = _deploy_workspace(name, workspace)
+    if not a.cwd:  # rsync -a can carry the source dir's mode in — re-lock the private tree we own
+        state_dir.chmod(0o700)
+        workspace.chmod(0o700)
 
     # 6. Summary + the one irreducibly-manual step (Discord app creation is a UI action).
     env_path = state_dir / ".env"
