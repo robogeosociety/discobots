@@ -254,8 +254,10 @@ start_embed() {
 
 bots=("$@")
 # Default set: `live` replaces the three standalone dashboard daemons
-# (dashboard/loop/embed) — those remain start-able by name for rollback.
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit skills live)
+# (dashboard/loop/embed), and `transit-panel` (one edited #transit message)
+# replaces `transit` (the per-alert firehose). Both replaced daemons stay
+# start-able by name for rollback.
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher transit-panel skills live)
 for b in "${bots[@]}"; do
   case "$b" in
     digest)    start_digest ;;
