@@ -7,6 +7,13 @@ Like tommybot's `docs/live.md`, this is a *contract*, not a shared library:
 each repo implements it against the same transport. The reference client is
 [`ops/discokit/bus.py`](../ops/discokit/bus.py).
 
+> **Canonical schema lives in the `supervisor` repo.** The envelope, the topic
+> catalog, and the change-management rules are owned by the level-1 loop's
+> `bus_contract.py` (obsidian-automations `docs/BUS-CONTRACT.md`, with a generated
+> `contract/bus.schema.json`). **This file is the consumer-side narrative** — when
+> the two disagree, `bus_contract.py` wins. Producers/consumers pin the schema
+> version they target and keep the bus an accelerant, never a dependency.
+
 ## Why a bus, and the one rule
 
 The loops are deliberately fault-isolated — each its own process, supervised but
