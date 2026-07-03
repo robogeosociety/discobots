@@ -102,6 +102,33 @@ start_transit() {
   echo "started discobot-transit (every 5 min)"
 }
 
+start_transit_panel() {
+  # The #transit live status panel: ONE message edited in place (a chip row per
+  # watched line, 🟢/🟡/🟠/🔴 by worst active effect) instead of transit_discord's
+  # fresh FIRING/Cleared post per alert (the loudest feed in the guild, ~62/day).
+  # Reuses the discobot-transit image (same OBA + gtfs deps), overriding the
+  # command to run the panel daemon. Same #transit webhook + OBA key as the
+  # alert notifier; the message id + content signature persist in the named
+  # volume discobot-transit-panel-state. Cutover: once this is proven, drop
+  # `transit` from the default set so the panel is the channel's sole voice;
+  # rollback is `ops/run.sh transit` (the per-alert notifier).
+  local webhook oba
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_TRANSIT)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
+  oba="$(grep -E '^[[:space:]]*oba_api_key:' "$TRANSIT_SVC" 2>/dev/null | head -1 \
+        | sed -E 's/^[[:space:]]*oba_api_key:[[:space:]]*//; s/[[:space:]]*(#.*)?$//; s/^["'\'']//; s/["'\'']$//')"
+  [ -n "$oba" ] && [ "$oba" != "TEST" ] || { echo "transit-panel: no real oba_api_key in $TRANSIT_SVC" >&2; return 1; }
+  [ -n "$webhook" ] || { echo "transit-panel: no DISCORD_WEBHOOK_TRANSIT/URL in grafana/.env" >&2; return 1; }
+  docker rm -f discobot-transit-panel >/dev/null 2>&1 || true
+  docker run -d --name discobot-transit-panel "${common_run[@]}" \
+    -e "OBA_API_KEY=$oba" -e "DISCORD_WEBHOOK_TRANSIT=$webhook" \
+    -e "TRANSIT_DASH_STATE=/state/transit.json" \
+    -v discobot-transit-panel-state:/state \
+    discobot-transit:latest \
+    python3 /app/transit_dashboard.py --interval 60 --iterations 0 >/dev/null
+  echo "started discobot-transit-panel (daemon; edits one #transit message in place; state in volume discobot-transit-panel-state)"
+}
+
 start_skills() {
   # Announces the fleet's Claude Code skills to #skills (DISCORD_WEBHOOK_SKILLS,
   # falling back to the general webhook). Reads the skill inventory from the
@@ -235,11 +262,12 @@ for b in "${bots[@]}"; do
     github)    start_github ;;
     watcher)   start_watcher ;;
     transit)   start_transit ;;
+    transit-panel) start_transit_panel ;;
     skills)    start_skills ;;
     live)      start_live ;;
     dashboard) start_dashboard ;;
     loop)      start_loop ;;
     embed)     start_embed ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|skills|dashboard|loop|embed)" >&2; exit 2 ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|transit|transit-panel|skills|live|dashboard|loop|embed)" >&2; exit 2 ;;
   esac
 done
