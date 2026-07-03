@@ -14,11 +14,17 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
 | **live** | `discobot-live` | daemon (one asyncio loop; 5 s / 30 s / 60 s / 5 min jobs) | dev-status `:8077`, InfluxDB `:8086`, host `~/Library/Caches/tommybot` (ro mount, DB + live.json), **the bus `:6379`**, Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
-| **valkey** | `discobot-valkey` | daemon (broker) | — (loopback `:6379`) | none — no secret; the fleet message bus (`docs/BUS.md`) |
 
 *(dashboard / loop / embed — the three standalone daemons `live` replaced — stay
-buildable + start-able by name for rollback, out of the default set. `valkey` starts
-first in the default set so `live` finds the bus.)*
+buildable + start-able by name for rollback, out of the default set.)*
+
+> **The message bus (`discobot-valkey`) is not a discobot** — it's shared fleet
+> infrastructure (the discobots inner loop *and* the obsidian-automations supervisor
+> ride it), so it lives as declarative Terraform in **`dev/infra/valkey/`**, not in
+> this `run.sh`. `just up` drives the bots; `cd dev/infra/valkey && make apply` (on
+> the mini) manages the broker + the `fleet-bus` network + the data volume. `run.sh`
+> still attaches `live` to `fleet-bus` by name and keeps an idempotent
+> network-ensure so `just up live` is self-sufficient.
 
 A container reaches the mini's localhost services (InfluxDB, dev-status) via
 `host.docker.internal`; `run.sh` rewrites `localhost`/`127.0.0.1` URLs accordingly.

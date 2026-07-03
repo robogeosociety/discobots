@@ -45,7 +45,7 @@ up *bots:
 down *bots:
     #!/usr/bin/env bash
     set -euo pipefail
-    names="{{bots}}"; [ -z "$names" ] && names="valkey digest github watcher opswatcher transit transit-panel skills live dashboard loop embed"
+    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher opswatcher transit transit-panel skills live dashboard loop embed"
     cmds=""; for b in $names; do cmds="$cmds docker rm -f discobot-$b;"; done
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; $cmds" || true
 
