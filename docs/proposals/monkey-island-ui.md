@@ -73,7 +73,8 @@ spotlight intro (`ops/skills_discord.py:161`), a transit quiet-hours line
 **Checkpoint C:** the actual caption lines go to Tommy as a selectable prompt.
 
 ### Phase 4 — the wiki theme (`obsidian-automations` · dev wiki)
-The Matrix skin retires (to git history) and `dev-wiki/theme/` gets its MI
+The Matrix skin retires (archived live on the `theme/matrix` branch; main
+strips at this phase's cutover) and `dev-wiki/theme/` gets its MI
 successor on the same file contract (`automations/dev_wiki.py:86` `THEME_DIRS`):
 **`mi.css`** — twilight palette as CSS custom properties over the shared base,
 consuming discokit's **generated `tokens.css`** for every semantic colour
