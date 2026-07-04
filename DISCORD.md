@@ -1,7 +1,7 @@
 # DISCORD.md — Discord bot config registry
 
 Canonical home for Tommy's Discord bot configuration and integration code on `~/dev`
-(`/Volumes/dev/discobots`, repo `tommyroar/discobots`). This file is the **registry +
+(`/Volumes/dev/discobots`, repo `robogeosociety/discobots`). This file is the **registry +
 source of truth** for *which
 Discord app/bot serves which purpose and where its config lives* — not a single secrets
 vault. Tokens stay where their service reads them (each bot is a distinct Discord
@@ -14,23 +14,23 @@ committed here** — see `.gitignore`.
 
 | Bot / app | Token location | Key(s) | Purpose | Repo |
 | --- | --- | --- | --- | --- |
-| **tommybot** | mini: `~/dev/tommybot/.env` (internal-disk checkout) | `DISCORD_BOT_TOKEN`, `DISCORD_CHANNELS` | Main Obsidian-RAG bot (MLX RAG over vault + InfluxDB). Hosted on the **mini** (`tommybot-mini` tier — Qwen3-1.7B, qwengen-verified to fit the 8 GB box) via launchd `com.tommybot.bot-mini` — live since 2026-07-01, tool-calls enabled (incl. `obsidian_*`, co-located with the wrapper). The Air can run it too (`com.tommybot.bot`, its own `.env`) but is currently dormant; only one host should hold a live gateway connection on a given token at a time. Also the **fallback token** for obsidian-automations. | `tommyroar/tommybot` |
-| **ask-dash** | `~/dev/observability/ask-dash/.env` | `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_ALLOWED_USER_IDS` | `/ask` slash-command gateway to the observability stack. | `tommyroar/observability-config` |
+| **tommybot** | mini: `~/dev/tommybot/.env` (internal-disk checkout) | `DISCORD_BOT_TOKEN`, `DISCORD_CHANNELS` | Main Obsidian-RAG bot (MLX RAG over vault + InfluxDB). Hosted on the **mini** (`tommybot-mini` tier — Qwen3-1.7B, qwengen-verified to fit the 8 GB box) via launchd `com.tommybot.bot-mini` — live since 2026-07-01, tool-calls enabled (incl. `obsidian_*`, co-located with the wrapper). The Air can run it too (`com.tommybot.bot`, its own `.env`) but is currently dormant; only one host should hold a live gateway connection on a given token at a time. Also the **fallback token** for obsidian-automations. | `robogeosociety/tommybot` |
+| **ask-dash** | `~/dev/observability/ask-dash/.env` | `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_ALLOWED_USER_IDS` | `/ask` slash-command gateway to the observability stack. | `robogeosociety/observability-config` |
 | **Claude Code plugin channels** | `~/.claude/channels/discord-*/.env` | `DISCORD_BOT_TOKEN` (+ `access.json`) | Claude Code agent chat channels — `discord`, `-dev`, `-devchan`, `-ops`, `-home`, `-camp`, `-obsidian`, `-trips`, `-maps`, `-models`. **Each channel is its own bot/app, plugin-managed.** Do not relocate. | n/a (system-managed) |
-| **ModelBot** (`discord-models`) | `~/.claude/channels/discord-models/.env` | `DISCORD_BOT_TOKEN` (+ `access.json`) | Channel-session Claude Code bot for **#models**: reads and swaps the mini's single global base model by driving the `tommybot model list/use` CLI (tommybot#79). A swap is not a live hot-swap — it's `use <name> --save` then a `com.tommybot.serve-mini` restart. Ships no tool code — its workspace (`channels/models/`) is just the persona. Bot-per-purpose; pin a cheap `SESSION_MODEL` for mechanical tool-calling. | `tommyroar/discobots` (persona under `channels/models/`) |
+| **ModelBot** (`discord-models`) | `~/.claude/channels/discord-models/.env` | `DISCORD_BOT_TOKEN` (+ `access.json`) | Channel-session Claude Code bot for **#models**: reads and swaps the mini's single global base model by driving the `tommybot model list/use` CLI (tommybot#79). A swap is not a live hot-swap — it's `use <name> --save` then a `com.tommybot.serve-mini` restart. Ships no tool code — its workspace (`channels/models/`) is just the persona. Bot-per-purpose; pin a cheap `SESSION_MODEL` for mechanical tool-calling. | `robogeosociety/discobots` (persona under `channels/models/`) |
 
 ### Webhooks (centralized)
 
 | Location | Key(s) | Purpose | Repo |
 | --- | --- | --- | --- |
-| `~/dev/observability/grafana/.env` | `DISCORD_WEBHOOK_URL`, `DISCORD_WEBHOOK_TRANSIT`, `DISCORD_WEBHOOK_DIGEST`, `DISCORD_WEBHOOK_WEATHER`, `DISCORD_WEBHOOK_SKILLS`, `DISCORD_WEBHOOK_OPS`, `DISCORD_WEBHOOK_URL_*` | **Single source of truth** for all notification/alert webhooks. Deployed to `~/.observability/grafana/.env` for the container. `DISCORD_WEBHOOK_OPS` is the #ops webhook (the `dashboard` and `loop` bots use it, falling back to the general `DISCORD_WEBHOOK_URL` → #ops). | `tommyroar/observability-config` |
+| `~/dev/observability/grafana/.env` | `DISCORD_WEBHOOK_URL`, `DISCORD_WEBHOOK_TRANSIT`, `DISCORD_WEBHOOK_DIGEST`, `DISCORD_WEBHOOK_WEATHER`, `DISCORD_WEBHOOK_SKILLS`, `DISCORD_WEBHOOK_OPS`, `DISCORD_WEBHOOK_URL_*` | **Single source of truth** for all notification/alert webhooks. Deployed to `~/.observability/grafana/.env` for the container. `DISCORD_WEBHOOK_OPS` is the #ops webhook (the `dashboard` and `loop` bots use it, falling back to the general `DISCORD_WEBHOOK_URL` → #ops). | `robogeosociety/observability-config` |
 
 ## Consumers (read the configs above)
 
 | Code | Reads | Repo |
 | --- | --- | --- |
-| **`ops/`** (this repo) — `digest.py`, `github_discord.py`, `transit_discord.py`, `watcher.py`, `skills_discord.py`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env` (skills uses `DISCORD_WEBHOOK_SKILLS`); digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token`; skills reads host `~/.claude/{skills,plugins}` | `tommyroar/discobots` |
-| `~/dev/obsidian-automations/automations/discord_notify.py`, `enrichment_discord.py` | `DISCORD_BOT_TOKEN` (falls back to `tommybot/.env`), `DISCORD_WEBHOOK_URL*` | `tommyroar/obsidian-automations` |
+| **`ops/`** (this repo) — `digest.py`, `github_discord.py`, `transit_discord.py`, `watcher.py`, `skills_discord.py`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env` (skills uses `DISCORD_WEBHOOK_SKILLS`); digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token`; skills reads host `~/.claude/{skills,plugins}` | `robogeosociety/discobots` |
+| `~/dev/obsidian-automations/automations/discord_notify.py`, `enrichment_discord.py` | `DISCORD_BOT_TOKEN` (falls back to `tommybot/.env`), `DISCORD_WEBHOOK_URL*` | `robogeosociety/obsidian-automations` |
 
 ## MCP servers (loaded by Claude discobot channels)
 

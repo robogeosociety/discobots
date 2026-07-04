@@ -12,7 +12,7 @@ _the Discord agent fleet — bots, collectors, data, graphs_
 | ✅ | `live` | #ops | daemon · edit-in-place | inner loop — four #ops panels in one asyncio process: ops status, loop ferris-wheel, embeddings sync, tommybot chat | discobots |
 | ✅ | `opswatcher` | #ops-watcher | daemon · edit-in-place | dev-status board — one live panel (collapsed the ~278/day up/down spam) | discobots |
 | ✅ | `transit-panel` | #transit | daemon · 60s, edit-in-place | per-line Link/transit status from OneBusAway (collapsed the ~62/day alert churn) | discobots |
-| ✅ | `github` | #github | every 30 min | new GitHub activity across the tommyroar org (PRs, pushes) | discobots |
+| ✅ | `github` | #github | every 30 min | new GitHub activity across the robogeosociety org (PRs, pushes) | discobots |
 | ✅ | `digest` | #ops | weekly · Mon 08:15 PT | InfluxDB health + dev-status weekly digest | discobots |
 | ✅ | `skills` | #skills | every 3h + daily 💡 spotlight | new Claude Code skills acquired across the fleet | discobots |
 | ✅ | `grafana-alerting` | #alerts | on firing / resolved | platform-health alerts from Grafana's InfluxDB-backed rules | observability-config |
