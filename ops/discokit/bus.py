@@ -23,6 +23,7 @@ dependency and a --dry path needs no server.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
@@ -149,6 +150,70 @@ class Bus:
             c.xack(f"{STREAM_PREFIX}{stream}", group, *ids)
         except Exception as exc:  # noqa: BLE001
             print(f"[bus] ack failed: {exc}", file=sys.stderr)
+
+    # --- coordination: distributed lock + windowed counter ------------------
+    # These turn the bus from a message channel into a coordination layer for
+    # the fleet's separate processes. Degradable and **fail-open**: with no bus
+    # the lock always "acquires" (single-process semantics preserved — nothing
+    # else can contend) and the counter returns None, so a broken bus can never
+    # wedge a caller.
+    def lock_acquire(self, name: str, *, ttl: int = 30, token: str | None = None) -> str | None:
+        """Try to take a lock (SET NX EX). Returns a token on success, None if
+        held elsewhere. A down/unreachable bus fails OPEN (returns a token)."""
+        token = token or f"{os.getpid()}-{id(object())}"
+        c = self.client
+        if c is None:
+            return token
+        try:
+            return token if c.set(f"lock:{name}", token, nx=True, ex=ttl) else None
+        except Exception as exc:  # noqa: BLE001 — a broken bus must not wedge the caller
+            print(f"[bus] lock {name} failed: {exc}", file=sys.stderr)
+            return token
+
+    def lock_release(self, name: str, token: str) -> None:
+        """Release a lock only if we still hold it (compare-and-delete).
+
+        A GET-then-DEL rather than a Lua CAS: the tiny window between the two is
+        acceptable for a best-effort fleet lock (the TTL bounds any stale hold),
+        and it works on any Redis-wire server without server-side scripting.
+        """
+        c = self.client
+        if c is None:
+            return
+        try:
+            key = f"lock:{name}"
+            if c.get(key) == token:
+                c.delete(key)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[bus] unlock {name} failed: {exc}", file=sys.stderr)
+
+    @contextlib.contextmanager
+    def locked(self, name: str, *, ttl: int = 30):
+        """`with bus.locked('job') as got:` — hold the lock for the block, release
+        after. `got` is True if acquired, False if someone else holds it (skip)."""
+        token = self.lock_acquire(name, ttl=ttl)
+        try:
+            yield token is not None
+        finally:
+            if token is not None:
+                self.lock_release(name, token)
+
+    def incr(self, name: str, *, window: int = 60, amount: int = 1) -> int | None:
+        """A windowed counter (INCRBY + EXPIRE on first bump). Returns the new
+        count, or None if the bus is down. For rate limits / live tallies — the
+        key self-expires after `window` seconds."""
+        c = self.client
+        if c is None:
+            return None
+        try:
+            key = f"count:{name}"
+            n = c.incrby(key, amount)
+            if n == amount:  # first bump in this window → set the TTL
+                c.expire(key, window)
+            return n
+        except Exception as exc:  # noqa: BLE001
+            print(f"[bus] incr {name} failed: {exc}", file=sys.stderr)
+            return None
 
 
 # --- debug CLI: publish/read the bus by hand (also a manual producer until the
