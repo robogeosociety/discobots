@@ -31,7 +31,7 @@ logic. (Grants `checks: read` + `statuses: read` — without them the rollup que
 throws; that was the bug the obsidian lane hit.) Unlabelled PRs merge the normal
 way — review, then `gh pr merge` / the GitHub UI.
 
-Create the label once: `gh label create automerge -R tommyroar/discobots -c 0e8a16`.
+Create the label once: `gh label create automerge -R robogeosociety/discobots -c 0e8a16`.
 
 ## 3. CD — the mini ships main + repaints the board
 

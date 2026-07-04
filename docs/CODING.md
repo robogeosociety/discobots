@@ -25,7 +25,7 @@ A new top-level repo is a structural decision that's Tommy's to make.
 - If you genuinely think a new repo is warranted, **stop and ask** — describe the change and
   let Tommy decide where it lives.
 - The failure this prevents: a maps agent, not knowing MapBot belonged in `discobots`, created
-  a stray `tommyroar/discord-maps` repo and committed there. The code had to be re-homed into
+  a stray `robogeosociety/discord-maps` repo and committed there. The code had to be re-homed into
   `discobots/maps/` and the stray repo deleted. One sentence of repo-context would have
   avoided the whole detour.
 

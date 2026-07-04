@@ -3,7 +3,7 @@
 Source of truth for **ModelBot**, the Claude Code channel agent that answers in Discord **#models**.
 Its single job is to **read and swap the mini's global base model** by driving the `tommybot model`
 CLI (`list` / `use <name> [--save]`) added in
-[tommyroar/tommybot#79](https://github.com/tommyroar/tommybot/pull/79). It ships **no tool code of
+[robogeosociety/tommybot#79](https://github.com/robogeosociety/tommybot/pull/79). It ships **no tool code of
 its own** — unlike MapBot, the whole tool is an already-installed CLI; this workspace is just the
 persona that drives it. Pin it to `claude-sonnet-5` (mechanical tool-calling — see the babysitter's
 `SESSION_MODEL`, as MapBot pins to sonnet).

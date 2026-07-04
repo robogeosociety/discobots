@@ -11,7 +11,7 @@ for Claude Code — local LLMs (qwen, tommybot) never see it; they don't write c
    `discobots`, under your subdir). Confirm it before you start: `git -C "$(pwd)" remote get-url origin`.
 2. **NEVER create a new GitHub repo.** No `gh repo create`, no fresh `git init` + remote. If
    you think you need one, **stop and ask Tommy.** _(A maps agent that didn't know its code
-   belonged here spun up a stray `tommyroar/discord-maps` repo — that's the mistake this rule
+   belonged here spun up a stray `robogeosociety/discord-maps` repo — that's the mistake this rule
    prevents.)_
 3. **Commit & PR inside your home repo**, via the **PR-newspaper framework** and a **git
    worktree** — never branch-switch a shared checkout.

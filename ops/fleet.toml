@@ -55,7 +55,7 @@ status = "operational"
 name = "github"
 channel = "#github"
 cadence = "every 30 min"
-what = "new GitHub activity across the tommyroar org (PRs, pushes)"
+what = "new GitHub activity across the robogeosociety org (PRs, pushes)"
 repo = "discobots"
 status = "operational"
 

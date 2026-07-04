@@ -13,22 +13,22 @@ import github_discord as gd  # noqa: E402
 # A stripped PullRequestEvent exactly as the user-events feed returns it.
 STRIPPED_OPENED = {
     "type": "PullRequestEvent",
-    "repo": {"name": "tommyroar/discobots"},
+    "repo": {"name": "robogeosociety/discobots"},
     "payload": {"action": "opened", "number": 42,
                 "pull_request": {"title": None, "user": None, "html_url": None}},
 }
 STRIPPED_MERGED = {
     "type": "PullRequestEvent",
-    "repo": {"name": "tommyroar/wikipedia-local"},
+    "repo": {"name": "robogeosociety/wikipedia-local"},
     "payload": {"action": "merged", "number": 3,
                 "pull_request": {"title": None, "user": None, "html_url": None}},
 }
 
 FAKE_PRS = {
-    ("tommyroar/discobots", 42): {"title": "Add heatmap", "user": {"login": "tommyroar"},
-                                  "html_url": "https://github.com/tommyroar/discobots/pull/42"},
-    ("tommyroar/wikipedia-local", 3): {"title": "Standardize", "user": {"login": "tommyroar"},
-                                       "html_url": "https://github.com/tommyroar/wikipedia-local/pull/3",
+    ("robogeosociety/discobots", 42): {"title": "Add heatmap", "user": {"login": "tommyroar"},
+                                  "html_url": "https://github.com/robogeosociety/discobots/pull/42"},
+    ("robogeosociety/wikipedia-local", 3): {"title": "Standardize", "user": {"login": "tommyroar"},
+                                       "html_url": "https://github.com/robogeosociety/wikipedia-local/pull/3",
                                        "merged": True},
 }
 
@@ -41,7 +41,7 @@ def test_opened_pr_is_hydrated_not_untitled():
     e = gd.event_to_embed(STRIPPED_OPENED, pr_fetcher=fake_fetcher)
     assert e["title"] == "PR Opened: #42 Add heatmap"       # real title + number, not "Untitled PR"
     assert "[@tommyroar](https://github.com/tommyroar)" in e["description"]
-    assert e["url"] == "https://github.com/tommyroar/discobots/pull/42"
+    assert e["url"] == "https://github.com/robogeosociety/discobots/pull/42"
     assert e["color"] == gd.COLOR_PR_OPEN
 
 
@@ -55,7 +55,7 @@ def test_merged_action_is_handled_and_hydrated():
 def test_url_falls_back_when_hydration_fails():
     e = gd.event_to_embed(STRIPPED_OPENED, pr_fetcher=lambda r, n: {})
     assert e["title"] == "PR Opened: #42 Untitled PR"       # graceful default...
-    assert e["url"] == "https://github.com/tommyroar/discobots/pull/42"  # ...but still a working link
+    assert e["url"] == "https://github.com/robogeosociety/discobots/pull/42"  # ...but still a working link
 
 
 def test_full_payload_needs_no_fetch():
