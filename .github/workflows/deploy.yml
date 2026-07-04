@@ -1,0 +1,44 @@
+# CD to the mini — push-deploy on the org runner (mini-fleet). A merge to main ships within
+# seconds via the repo's own ops/autodeploy.sh (guarded ff → build images → start bots →
+# repaint the #discobots board); the 2-min poller plist stays installed as a belt during
+# burn-in. If the poller wins the race (checkout already advanced), we still rebuild + run
+# so a red build can't hide behind an already-moved HEAD.
+name: deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-discobots-mini
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, macOS, fleet]
+    timeout-minutes: 25
+    steps:
+      - name: Ship main to the mini (native autodeploy, one-shot)
+        run: |
+          export PATH="$HOME/.orbstack/bin:$PATH"
+          pre="$(git -C /Volumes/dev/discobots rev-parse HEAD)"
+          if [ "$pre" = "$GITHUB_SHA" ]; then
+            echo "checkout already at $GITHUB_SHA (poller won the race) — ensuring images + bots are current"
+            cd /Volumes/dev/discobots
+            ops/build.sh
+            ops/run.sh || echo "run.sh nonzero (a bot may still need a secret) — continuing"
+          else
+            /Volumes/dev/discobots/ops/autodeploy.sh
+          fi
+
+      - name: Verify the checkout took the trigger SHA
+        run: |
+          have="$(git -C /Volumes/dev/discobots rev-parse HEAD)"
+          [ "$have" = "$GITHUB_SHA" ] || { echo "checkout at $have, expected $GITHUB_SHA (dirty or diverged — fix /Volumes/dev/discobots)"; exit 1; }
+
+      - name: Fleet-up check
+        run: |
+          export PATH="$HOME/.orbstack/bin:$PATH"
+          n="$(docker ps --format '{{.Names}}' | grep -c '^discobot-' || true)"
+          echo "$n discobot containers running"
+          [ "$n" -ge 1 ] || { echo "no discobot containers up after deploy"; exit 1; }
