@@ -31,10 +31,13 @@ jobs:
             /Volumes/dev/discobots/ops/autodeploy.sh
           fi
 
-      - name: Verify the checkout took the trigger SHA
+      - name: Verify the trigger commit is deployed
+        # Ancestor, not equality: main may be ahead of this run's trigger (reruns, merge
+        # trains) — what matters is that THIS commit made it to the box.
         run: |
           have="$(git -C /Volumes/dev/discobots rev-parse HEAD)"
-          [ "$have" = "$GITHUB_SHA" ] || { echo "checkout at $have, expected $GITHUB_SHA (dirty or diverged — fix /Volumes/dev/discobots)"; exit 1; }
+          git -C /Volumes/dev/discobots merge-base --is-ancestor "$GITHUB_SHA" "$have" \
+            || { echo "checkout at $have does not contain $GITHUB_SHA (dirty or diverged — fix /Volumes/dev/discobots)"; exit 1; }
 
       - name: Fleet-up check
         run: |
