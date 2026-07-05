@@ -1,6 +1,6 @@
 ---
 type: proposal
-implemented_by: [46]
+implemented_by: [46, "obsidian-automations#232"]
 tracking: 0
 ---
 
