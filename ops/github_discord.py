@@ -41,6 +41,10 @@ HUMAN_TASK_LABEL = "human-task"
 # and only announce runs younger than this (a fresh state volume must not
 # replay history).
 CI_ACTIVE_DAYS = 3
+# Never announce org events older than this. The dashboard feed reaches back
+# ~90 days, so a fresh seen-id state (first deploy, recreated volume) would
+# otherwise replay months of history into the channel.
+EVENT_MAX_AGE_HOURS = 24
 # Env-overridable so the supervisor (fleet-hosting F1) can point state at its
 # own state dir instead of the container volume / ~/.local/share default.
 STATE_DIR = Path(os.environ.get("GITHUB_STATE_DIR", str(Path.home() / ".local" / "share" / "github-discord")))
@@ -306,10 +310,14 @@ def main() -> None:
     feed = ChangeFeed(StateFile(STATE_FILE))
     new_embeds: list[dict] = []
 
+    horizon = datetime.now(timezone.utc) - timedelta(hours=EVENT_MAX_AGE_HOURS)
     for event in fetch_events():
         eid = event.get("id", "")
         if not feed.is_new(eid):
             continue
+        created = _parse_ts(event.get("created_at"))
+        if created is not None and created < horizon:
+            continue  # too old — mark seen (above) but never announce
         embed = event_to_embed(event)
         if embed:
             new_embeds.append(embed)
