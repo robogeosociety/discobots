@@ -251,6 +251,21 @@ SCENES = {
     "ship_underway": ship_underway,
 }
 
+# States the fleet actually has → the scene that tells them. The Discord
+# moments (P2) and the wiki hub headers (P4) call THIS, not the registry.
+_STATE_SCENES = {
+    "stable": "melee_dock",
+    "deployed": "ship_underway",
+    "recovered": "dock_dawn",
+}
+
+
+def scene_for(state: str) -> tuple[str, str]:
+    """(rendered scene, caption) for a fleet state — unknown states read as stable."""
+    name = _STATE_SCENES.get(state, "melee_dock")
+    return SCENES[name](), CAPTIONS[name]
+
+
 # ── the mechanical grammar (the style guide's checkable rules) ───────────────
 # Phase-4 LoRA fitness reuses THIS function: a generated scene must pass
 # check() before it may post. The thresholds ARE the guide: grid bounds, a

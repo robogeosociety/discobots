@@ -101,6 +101,14 @@ def test_ship_underway_reads_from_outline():
     assert "@" in scene  # the stern lantern
 
 
+def test_scene_for_maps_states_and_defaults_to_stable():
+    for state, name in (("stable", "melee_dock"), ("deployed", "ship_underway"), ("recovered", "dock_dawn")):
+        scene, caption = art.scene_for(state)
+        assert caption == art.CAPTIONS[name], state
+        assert art.check(scene) == [], state
+    assert art.scene_for("no-such-state")[1] == art.CAPTIONS["melee_dock"]
+
+
 def test_check_flags_each_banned_register():
     assert art.check("▓▒░") != []  # ANSI/DOS blocks — graph.py's genre
     assert art.check("x" * 81) != []  # wider than the grid contract
