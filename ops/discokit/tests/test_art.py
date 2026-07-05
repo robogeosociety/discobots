@@ -96,8 +96,8 @@ def test_dock_dawn_reads_dawn():
 
 def test_ship_underway_reads_from_outline():
     scene = art.ship_underway()
-    assert "|##\\" in scene  # the rigged mast survives the light pass
-    assert "\\########/" in scene  # the hull mass
+    assert "|##\\" in scene  # the rigged mainmast survives the light pass
+    assert "\\############/" in scene  # the hull mass, freeboard and all
     assert "@" in scene  # the stern lantern
 
 

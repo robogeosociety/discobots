@@ -194,32 +194,43 @@ def ship_underway(width: int = 64, height: int = 18) -> str:
     c = Canvas(width, height)
 
     horizon = height // 2
-    hull_top = horizon + 1
-    hull_bottom = height - 4
+    mast_top = horizon - 2  # the rig climbs into the sky — silhouette against stars
+    keel = height - 3
     ship_x = width // 2 - 4
 
     c.scatter(0, horizon, 0.04)  # night sky, scattered stars
     c.band(horizon, horizon + 1, 0.5, ramp=" -.")  # horizon dither seam
     c.band(horizon + 1, height, 0.2, ramp=" .:-")  # open water
-    for y in range(hull_bottom + 1, height):  # the dock stub she's leaving
-        for x in range(0, 7 - 2 * (y - hull_bottom - 1)):
+    for y in range(keel, height):  # the dock stub she's leaving
+        for x in range(0, 7 - 2 * (y - keel)):
             c.grid[y][x] = "#"
 
     # the wake: a dashed seam back toward the dock, fading with distance
     for x in range(8, ship_x + 2):
-        c.grid[hull_bottom + 1][x] = shade(0.72 - (ship_x - x) / 55, x, hull_bottom + 1, ramp=" -")
+        c.grid[keel][x] = shade(0.72 - (ship_x - x) / 55, x, keel, ramp=" -")
 
     # lanternlight on the water FIRST — the ship overlays it as pure silhouette
     # (glow repaints non-ramp glyphs, so it must never run over the rigging)
-    c.glow(ship_x + 3, hull_top + 3, 9.0, boost=0.5, ramp=" .:-=+#@")
+    c.glow(ship_x + 1, keel - 2, 9.0, boost=0.5, ramp=" .:-=+#@")
 
-    # the ship — mast, sail, hull; bow to open water, outline-first
+    # the ship — two masts, filled sails, a hull with freeboard; bow to open
+    # water, every shape reading from outline before the interior mass
     c.sprite(
-        ship_x, hull_top, "      |\\\n      |#\\\n      |##\\\n \\____|###\\_\n  \\########/\n   `------'"
+        ship_x,
+        mast_top,
+        "      |\n"
+        "      |\\\n"
+        "      |#\\\n"
+        "      |##\\\n"
+        "  |   |###\\\n"
+        "  |\\  |####\\\n"
+        " _|#\\_|#####\\_\n"
+        " \\############/\n"
+        "  `----------'",
     )
 
     # the ONE light source: the stern lantern, hung on the aft rail
-    c.sprite(ship_x + 3, hull_top + 3, "@")
+    c.sprite(ship_x + 1, keel - 2, "@")
 
     return c.render()
 
