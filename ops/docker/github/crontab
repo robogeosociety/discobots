@@ -1,2 +1,5 @@
-# GitHub activity → Discord, every 30 minutes.
+# #dev heartbeat — org GitHub activity + human-task board, every 30 minutes.
 */30 * * * * python /app/github_discord.py
+# Daily dev check-in — 08:00 container-local (TZ=America/Los_Angeles from
+# run.sh). This line is the cadence config; edit + rebuild to change it.
+0 8 * * * python /app/dev_checkin.py

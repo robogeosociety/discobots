@@ -23,13 +23,13 @@ committed here** — see `.gitignore`.
 
 | Location | Key(s) | Purpose | Repo |
 | --- | --- | --- | --- |
-| `~/dev/observability/grafana/.env` | `DISCORD_WEBHOOK_URL`, `DISCORD_WEBHOOK_TRANSIT`, `DISCORD_WEBHOOK_DIGEST`, `DISCORD_WEBHOOK_WEATHER`, `DISCORD_WEBHOOK_SKILLS`, `DISCORD_WEBHOOK_OPS`, `DISCORD_WEBHOOK_URL_*` | **Single source of truth** for all notification/alert webhooks. Deployed to `~/.observability/grafana/.env` for the container. `DISCORD_WEBHOOK_OPS` is the #ops webhook (the `dashboard` and `loop` bots use it, falling back to the general `DISCORD_WEBHOOK_URL` → #ops). | `robogeosociety/observability-config` |
+| `~/dev/observability/grafana/.env` | `DISCORD_WEBHOOK_URL`, `DISCORD_WEBHOOK_TRANSIT`, `DISCORD_WEBHOOK_DIGEST`, `DISCORD_WEBHOOK_WEATHER`, `DISCORD_WEBHOOK_SKILLS`, `DISCORD_WEBHOOK_OPS`, `DISCORD_WEBHOOK_DEV`, `DISCORD_WEBHOOK_URL_*` | **Single source of truth** for all notification/alert webhooks. Deployed to `~/.observability/grafana/.env` for the container. `DISCORD_WEBHOOK_OPS` is the #ops webhook (the `dashboard` and `loop` bots use it, falling back to the general `DISCORD_WEBHOOK_URL` → #ops). `DISCORD_WEBHOOK_DEV` is the #dev heartbeat channel (né #github — same channel id; the legacy `DISCORD_WEBHOOK_GITHUB` key still resolves as its fallback). The supervisor's fleet-sync workflow step also reads it (the `mini-fleet` runner is on the mini). | `robogeosociety/observability-config` |
 
 ## Consumers (read the configs above)
 
 | Code | Reads | Repo |
 | --- | --- | --- |
-| **`ops/`** (this repo) — `digest.py`, `github_discord.py`, `transit_discord.py`, `watcher.py`, `skills_discord.py`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env` (skills uses `DISCORD_WEBHOOK_SKILLS`); digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token`; skills reads host `~/.claude/{skills,plugins}` | `robogeosociety/discobots` |
+| **`ops/`** (this repo) — `digest.py`, `github_discord.py` + `dev_checkin.py` (the #dev heartbeat: org GitHub activity, human-task board, daily check-in), `transit_discord.py`, `watcher.py`, `skills_discord.py`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env` (skills uses `DISCORD_WEBHOOK_SKILLS`; github/dev-checkin prefer `DISCORD_WEBHOOK_DEV`); digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token`; skills reads host `~/.claude/{skills,plugins}` | `robogeosociety/discobots` |
 | `~/dev/obsidian-automations/automations/discord_notify.py`, `enrichment_discord.py` | `DISCORD_BOT_TOKEN` (falls back to `tommybot/.env`), `DISCORD_WEBHOOK_URL*` | `robogeosociety/obsidian-automations` |
 
 ## MCP servers (loaded by Claude discobot channels)
@@ -67,7 +67,8 @@ needs Apple Metal, no GPU in a Linux container.
 - **Secrets stay on the mini host** and are injected at `docker run` by `ops/run.sh` (read
   from `observability/{grafana,ask-dash}/.env`, `gh auth token`, transit's `service.yaml`).
   Nothing secret enters an image or this repo.
-- **Bots:** `digest` (weekly Mon 08:15), `github` (every 30 min), `watcher` (daemon),
+- **Bots:** `digest` (weekly Mon 08:15), `github` (the #dev heartbeat — org activity +
+  human-task board every 30 min, dev check-in daily 08:00), `watcher` (daemon),
   `transit` (every 5 min — OneBusAway GTFS-RT alerts for watched routes → transit channel).
 
 ## Conventions

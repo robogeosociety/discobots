@@ -9,9 +9,9 @@ details are in [`ops/README.md`](../ops/README.md); this page is the tour.
 
 ## The `discokit` dynamic dashboards
 
-Both post to **#ops** (there's no webhook that targets a #dev channel — every webhook in
-`observability/grafana/.env` resolves to #ops/#obsidian/#transit/#weather, checked via the Discord
-API) and share the same shape: post once, remember the message id, PATCH-edit on every poll, skip
+Both post to **#ops** (the #dev heartbeat — the renamed #github channel — is the notifier
+`github`'s beat, not a dashboard's; the other webhooks in `observability/grafana/.env` resolve to
+#ops/#obsidian/#transit/#weather) and share the same shape: post once, remember the message id, PATCH-edit on every poll, skip
 the edit entirely when nothing changed (a content-hash gate), and degrade to the **last-known**
 render rather than go silent if their data source is unreachable.
 

@@ -9,7 +9,7 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | Bot | Container | Schedule | Reaches | Secrets (host-side, injected at run) |
 | --- | --- | --- | --- | --- |
 | **digest** | `discobot-digest` | weekly, Mon 08:15 PT | InfluxDB `:8086`, dev-status `:8077`, Discord | `ask-dash/.env` InfluxDB creds + `grafana/.env` webhook |
-| **github** | `discobot-github` | every 30 min | GitHub (`gh api`), Discord | `gh auth token` + `grafana/.env` webhook |
+| **github** | `discobot-github` | the #dev heartbeat: feeds every 30 min + check-in daily 08:00 PT | GitHub (`gh api`), Discord | `gh auth token` + `grafana/.env` `DISCORD_WEBHOOK_DEV` (→ `_GITHUB` → general fallback) |
 | **watcher** | `discobot-watcher` | daemon (poll loop) | dev-status `:8077`, Discord | `grafana/.env` webhook |
 | **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |

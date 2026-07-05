@@ -12,7 +12,7 @@ _the Discord agent fleet — bots, collectors, data, graphs_
 | ✅ | `live` | #ops | daemon · edit-in-place | inner loop — four #ops panels in one asyncio process: ops status, loop ferris-wheel, embeddings sync, tommybot chat | discobots |
 | ✅ | `opswatcher` | #ops-watcher | daemon · edit-in-place | dev-status board — one live panel (collapsed the ~278/day up/down spam) | discobots |
 | ✅ | `transit-panel` | #transit | daemon · 60s, edit-in-place | per-line Link/transit status from OneBusAway (collapsed the ~62/day alert churn) | discobots |
-| ✅ | `github` | #github | every 30 min | new GitHub activity across the robogeosociety org (PRs, pushes) | discobots |
+| ✅ | `github` | #dev | every 30 min + daily 08:00 PT check-in | dev heartbeat — org GitHub activity (PRs, red CI, releases, issues), human-task board, daily check-in | discobots |
 | ✅ | `digest` | #ops | weekly · Mon 08:15 PT | InfluxDB health + dev-status weekly digest | discobots |
 | ✅ | `skills` | #skills | every 3h + daily 💡 spotlight | new Claude Code skills acquired across the fleet | discobots |
 | ✅ | `grafana-alerting` | #alerts | on firing / resolved | platform-health alerts from Grafana's InfluxDB-backed rules | observability-config |
@@ -23,7 +23,7 @@ _the Discord agent fleet — bots, collectors, data, graphs_
 | --- | --- | --- | --- |
 | ✅ | `weather` | wttr.in | daily / weekly notes |
 | ✅ | `transit` | OneBusAway GTFS-Realtime | #transit panel + daily notes |
-| ✅ | `github` | GitHub API | #github + changelog + daily notes |
+| ✅ | `github` | GitHub API | #dev + changelog + daily notes |
 | ✅ | `mountain` | mountain webcams | daily notes |
 | ✅ | `tokens` | CF/token pool status | daily notes |
 | ✅ | `campsite-inventory` | campsite mirrors | RGS PRs + camping notes |

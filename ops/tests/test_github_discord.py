@@ -75,3 +75,121 @@ def test_closed_unmerged_is_skipped():
                      "pull_request": {"title": "Nope", "user": {"login": "a"},
                                       "html_url": "u", "merged": False}}}
     assert gd.event_to_embed(e, pr_fetcher=fake_fetcher) is None
+
+
+# --- the #dev heartbeat additions: issues, releases, CI scan, human-task board ---
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from discokit.notify import ChangeFeed, StateFile  # noqa: E402
+
+NOW = datetime(2026, 7, 5, 12, 0, tzinfo=timezone.utc)
+
+
+def _mk_issue_event(action, labels=(), number=7, title="Fix the thing"):
+    return {"type": "IssuesEvent", "repo": {"name": "robogeosociety/supervisor"},
+            "payload": {"action": action,
+                        "issue": {"number": number, "title": title,
+                                  "user": {"login": "tommyroar"},
+                                  "html_url": f"https://github.com/robogeosociety/supervisor/issues/{number}",
+                                  "labels": [{"name": n} for n in labels]}}}
+
+
+def test_issue_opened_is_announced():
+    e = gd.event_to_embed(_mk_issue_event("opened"))
+    assert e["title"] == "Issue Opened: #7 Fix the thing"
+    assert e["color"] == gd.COLOR_ISSUE
+
+
+def test_issue_assigned_is_skipped():
+    assert gd.event_to_embed(_mk_issue_event("assigned")) is None
+
+
+def test_human_task_issue_event_is_left_to_the_board_scan():
+    assert gd.event_to_embed(_mk_issue_event("opened", labels=("human-task",))) is None
+
+
+def test_release_published_is_announced():
+    e = {"type": "ReleaseEvent", "repo": {"name": "robogeosociety/supervisor"},
+         "payload": {"action": "published",
+                     "release": {"tag_name": "2026.07.04", "name": "2026.07.04",
+                                 "html_url": "https://github.com/robogeosociety/supervisor/releases/tag/2026.07.04"}}}
+    out = gd.event_to_embed(e)
+    assert out["title"] == "🚀 Release: robogeosociety/supervisor 2026.07.04"
+    assert out["color"] == gd.COLOR_RELEASE
+    e["payload"]["action"] = "created"
+    assert gd.event_to_embed(e) is None  # only `published` is newsworthy
+
+
+def _ci_fetch(failure_age_days=1):
+    created = (NOW - timedelta(days=failure_age_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def fetch(path):
+        if path.startswith("/orgs/"):
+            return [{"full_name": "robogeosociety/discobots", "name": "discobots",
+                     "default_branch": "main", "archived": False,
+                     "pushed_at": NOW.strftime("%Y-%m-%dT%H:%M:%SZ")}]
+        return {"workflow_runs": [
+            {"id": 111, "name": "ci", "conclusion": "failure", "created_at": created,
+             "html_url": "https://github.com/robogeosociety/discobots/actions/runs/111"},
+            {"id": 112, "name": "ci", "conclusion": "success", "created_at": created},
+        ]}
+    return fetch
+
+
+def test_ci_failure_announced_once(tmp_path):
+    feed = ChangeFeed(StateFile(tmp_path / "state.json"))
+    first = gd.scan_ci_failures(feed, fetch=_ci_fetch(), now=NOW)
+    assert [e["title"] for e in first] == ["CI Failed: ci"]
+    assert first[0]["color"] == gd.COLOR_CI_FAIL
+    # same run again → already seen, nothing new
+    assert gd.scan_ci_failures(feed, fetch=_ci_fetch(), now=NOW) == []
+
+
+def test_ci_old_failures_are_not_replayed(tmp_path):
+    feed = ChangeFeed(StateFile(tmp_path / "state.json"))
+    stale = gd.scan_ci_failures(feed, fetch=_ci_fetch(failure_age_days=10), now=NOW)
+    assert stale == []  # a fresh state volume must not dredge up history
+
+
+def _board_fetch(items):
+    return lambda path: {"items": items}
+
+
+def _task(number, state="open", comments=0, title="Rack the new disk"):
+    return {"number": number, "state": state, "comments": comments, "title": title,
+            "repository_url": "https://api.github.com/repos/robogeosociety/robot-geographical-society",
+            "html_url": f"https://github.com/robogeosociety/robot-geographical-society/issues/{number}"}
+
+
+def test_board_first_run_seeds_silently(tmp_path):
+    state = StateFile(tmp_path / "tasks.json")
+    assert gd.scan_human_tasks(state, fetch=_board_fetch([_task(1), _task(2)])) == []
+    # second run, same board → still quiet
+    assert gd.scan_human_tasks(state, fetch=_board_fetch([_task(1), _task(2)])) == []
+
+
+def test_board_transitions_announce_once_each(tmp_path):
+    state = StateFile(tmp_path / "tasks.json")
+    gd.scan_human_tasks(state, fetch=_board_fetch([_task(1)]))  # seed
+
+    opened = gd.scan_human_tasks(state, fetch=_board_fetch([_task(1), _task(3)]))
+    assert [e["title"] for e in opened] == [
+        "🧭 Human task opened: robot-geographical-society#3 Rack the new disk"]
+
+    commented = gd.scan_human_tasks(state, fetch=_board_fetch([_task(1, comments=2), _task(3)]))
+    assert len(commented) == 1 and commented[0]["title"].startswith("💬 Human task activity")
+    assert "**New comments:** 2" in commented[0]["description"]
+
+    closed = gd.scan_human_tasks(state, fetch=_board_fetch([_task(1, state="closed", comments=2), _task(3)]))
+    assert len(closed) == 1 and closed[0]["title"].startswith("✅ Human task closed")
+    assert closed[0]["color"] == gd.COLOR_TASK_DONE
+
+
+def test_board_fetch_failure_keeps_snapshot(tmp_path):
+    state = StateFile(tmp_path / "tasks.json")
+    gd.scan_human_tasks(state, fetch=_board_fetch([_task(1)]))
+    assert gd.scan_human_tasks(state, fetch=lambda p: None) == []
+    # the snapshot survived — task 1 closing is still detected afterwards
+    out = gd.scan_human_tasks(state, fetch=_board_fetch([_task(1, state="closed")]))
+    assert len(out) == 1 and out[0]["title"].startswith("✅")
