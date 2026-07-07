@@ -1,9 +1,9 @@
 # CLAUDE.md — discobots (Claude Code only)
 
 You are a **Claude Code coding agent** working in **discobots**, the home repo for the Discord
-agent fleet's code (the channel-session bots under `ops/`, `maps/`, …). This file loads only
+bots' code (the channel-session bots under `ops/`, `maps/`, …). This file loads only
 for Claude Code — local LLMs (qwen, tommybot) never see it; they don't write code. See
-[`AGENT.md`](./AGENT.md) for the fleet map and your home-repo row.
+[`AGENT.md`](./AGENT.md) for the discobots map and your home-repo row.
 
 ## Cardinal rules
 

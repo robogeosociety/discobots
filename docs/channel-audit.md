@@ -2,7 +2,7 @@
 
 A full index of the private `tommyroar` guild (`1480240435585618064`, 15 text channels),
 sampled up to ~300 recent messages/channel via the bot token on the mini. Goal: keep Grafana,
-and **enhance** how Grafana/InfluxDB data feeds the fleet's Discord surfaces — so this catalogs the
+and **enhance** how Grafana/InfluxDB data feeds discobots' Discord surfaces — so this catalogs the
 **noisy bots**, **miscategorized feeds**, and **missing displays/images** to fix.
 
 ## Channel map

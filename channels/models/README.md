@@ -68,7 +68,7 @@ Like every channel-session bot, the Discord binding lives on the mini, not in th
 
    The model pin is a **separate `SESSION_MODEL` associative array** in the same file (not an inline
    roster field) — add `models claude-sonnet-5` to it for cheap mechanical tool-calling.
-3. **Register it** — add the `models` row to [`AGENT.md`](../../AGENT.md)'s fleet table and the
+3. **Register it** — add the `models` row to [`AGENT.md`](../../AGENT.md)'s session table and the
    ModelBot entry to [`DISCORD.md`](../../DISCORD.md) (done in this PR).
 
 Ongoing edits to an existing channel (cwd, model pin, emoji, aliases) go through

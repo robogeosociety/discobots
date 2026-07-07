@@ -28,7 +28,7 @@ Three things live here:
 | **github** | every 30 min | New GitHub activity for `tommyroar` → Discord |
 | **watcher** | daemon | Watches the dev-status server, posts on service up/down changes |
 | **transit** | every 5 min | OneBusAway **GTFS-Realtime** alerts for watched routes → transit channel |
-| **skills** | every 3 h + daily spotlight | New Claude Code skills the fleet gains → `#skills`, plus a daily 💡 spotlight on an existing one |
+| **skills** | every 3 h + daily spotlight | New Claude Code skills discobots gains → `#skills`, plus a daily 💡 spotlight on an existing one |
 | **dashboard** | daemon (30 s poll) | Dynamic **#ops** status board — dev-status readout, one message edited in place |
 | **loop** | daemon (60 s poll) | The `obsidian-automations` supervisor loop as a spinning ASCII ferris wheel → **#ops** |
 | **embed** | daemon (5 min poll) | tommybot's slow embeddings-sync progress, graphed → **#ops** |

@@ -1,4 +1,4 @@
-# docs/ops.md — the `ops/` bot fleet
+# docs/ops.md — the `ops/` discobots
 
 Eight Discord automations, each its own **OrbStack container on the always-on Mac mini**, built on
 the mini and deployed/managed remotely from the MacBook Air via the repo-root
@@ -86,7 +86,7 @@ unreachable**. Preview locally with no DB/Discord/deps:
 python3 ops/embed_dashboard.py --dry --demo
 ```
 
-## The rest of the fleet
+## The rest of the bots
 
 | Bot | Schedule | What it does |
 | --- | --- | --- |
@@ -94,10 +94,10 @@ python3 ops/embed_dashboard.py --dry --demo
 | **github** | every 30 min | New GitHub activity for `tommyroar` → Discord |
 | **watcher** | daemon (poll loop) | Watches the dev-status server, posts on service up/down changes |
 | **transit** | every 5 min | OneBusAway GTFS-Realtime alerts for watched routes → transit channel |
-| **skills** | every 3 h + daily spotlight | New Claude Code skills the fleet gains → `#skills`, plus a daily 💡 spotlight on an existing one |
+| **skills** | every 3 h + daily spotlight | New Claude Code skills discobots gains → `#skills`, plus a daily 💡 spotlight on an existing one |
 | **dashboard** | daemon (30 s poll) | The original `discokit` dashboard — dev-status readout, one message edited in place, in **#ops** |
 
-## Operating the fleet
+## Operating the bots
 
 Every recipe in the repo-root `justfile` runs over SSH/Tailscale — docker executes on the mini,
 nothing to install on the Air:
@@ -112,4 +112,4 @@ just down             # stop/remove containers
 ```
 
 See [`ops/README.md`](../ops/README.md) for the full per-bot image/mount/secret layout, and
-[`AGENT.md`](../AGENT.md) for the fleet's agent conventions.
+[`AGENT.md`](../AGENT.md) for discobots' agent conventions.

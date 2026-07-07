@@ -23,7 +23,7 @@ committed here** — see `.gitignore`.
 
 | Location | Key(s) | Purpose | Repo |
 | --- | --- | --- | --- |
-| `~/dev/observability/grafana/.env` | `DISCORD_WEBHOOK_URL`, `DISCORD_WEBHOOK_TRANSIT`, `DISCORD_WEBHOOK_DIGEST`, `DISCORD_WEBHOOK_WEATHER`, `DISCORD_WEBHOOK_SKILLS`, `DISCORD_WEBHOOK_OPS`, `DISCORD_WEBHOOK_DEV`, `DISCORD_WEBHOOK_URL_*` | **Single source of truth** for all notification/alert webhooks. Deployed to `~/.observability/grafana/.env` for the container. `DISCORD_WEBHOOK_OPS` is the #ops webhook (the `dashboard` and `loop` bots use it, falling back to the general `DISCORD_WEBHOOK_URL` → #ops). `DISCORD_WEBHOOK_DEV` is the #dev heartbeat channel (né #github — same channel id; the legacy `DISCORD_WEBHOOK_GITHUB` key still resolves as its fallback). The supervisor's fleet-sync workflow step also reads it (the `mini-fleet` runner is on the mini). | `robogeosociety/observability-config` |
+| `~/dev/observability/grafana/.env` | `DISCORD_WEBHOOK_URL`, `DISCORD_WEBHOOK_TRANSIT`, `DISCORD_WEBHOOK_DIGEST`, `DISCORD_WEBHOOK_WEATHER`, `DISCORD_WEBHOOK_SKILLS`, `DISCORD_WEBHOOK_OPS`, `DISCORD_WEBHOOK_DEV`, `DISCORD_WEBHOOK_URL_*` | **Single source of truth** for all notification/alert webhooks. Deployed to `~/.observability/grafana/.env` for the container. `DISCORD_WEBHOOK_OPS` is the #ops webhook (the `dashboard` and `loop` bots use it, falling back to the general `DISCORD_WEBHOOK_URL` → #ops). `DISCORD_WEBHOOK_DEV` is the #dev heartbeat channel (né #github — same channel id; the legacy `DISCORD_WEBHOOK_GITHUB` key still resolves as its fallback). The supervisor's repo-sync workflow step also reads it (the `mini-fleet` runner is on the mini). | `robogeosociety/observability-config` |
 
 ## Consumers (read the configs above)
 
@@ -36,7 +36,7 @@ committed here** — see `.gitignore`.
 
 Local (stdio) MCP servers registered in the mini's top-level `~/.claude.json` →
 `mcpServers`, available to **any** Claude Code discobot channel session (the config is
-global to that `.claude.json`, not per-channel) — see the mini's own `AGENT.md` fleet
+global to that `.claude.json`, not per-channel) — see the mini's own `AGENT.md` session
 table for which channel is which. Code lives here under `mcp/`; secrets, if any, follow
 this file's usual config-contract convention (values in `.env`, never committed) — but
 none of these currently need any.
