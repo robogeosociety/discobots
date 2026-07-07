@@ -8,7 +8,7 @@ One embed in the voice of a morning status update:
   • PRs merged across robogeosociety since the last check-in
   • default-branch CI health for recently-active repos (✅ / 🔴 chips)
   • the open human-task queue (issues labeled `human-task`)
-  • upcoming scheduled events (fleet-sync Mondays 07:17 UTC)
+  • upcoming scheduled events (repo-sync Mondays 07:17 UTC)
 
 Template-rendered by design; a `claude -p` narrative pass (the
 obsidian-automations #92/#93 precedent) is a documented follow-on, not this
@@ -82,8 +82,8 @@ def ci_health(fetch=gh_api, now: datetime | None = None) -> list[tuple[str, str]
     return chips
 
 
-def next_fleet_sync(now: datetime | None = None) -> datetime:
-    """The next scheduled fleet-sync: Mondays 07:17 UTC (supervisor repo)."""
+def next_repo_sync(now: datetime | None = None) -> datetime:
+    """The next scheduled repo-sync: Mondays 07:17 UTC (supervisor repo)."""
     now = now or datetime.now(timezone.utc)
     candidate = now.replace(hour=7, minute=17, second=0, microsecond=0)
     days_ahead = (0 - now.weekday()) % 7  # Monday = 0
@@ -127,8 +127,8 @@ def build_checkin(since: datetime, now: datetime | None = None, fetch=gh_api) ->
         f"**Open human tasks ({len(tasks)})**\n" + ("\n".join(tlines) or "• queue clear 🎉")
     )
 
-    sync = next_fleet_sync(now)
-    sections.append(f"**Upcoming**\n• fleet-sync <t:{int(sync.timestamp())}:F> (supervisor, mini-fleet runner)")
+    sync = next_repo_sync(now)
+    sections.append(f"**Upcoming**\n• repo-sync <t:{int(sync.timestamp())}:F> (supervisor, mini-fleet runner)")
 
     return {
         "title": f"☕ Dev check-in — {now.astimezone().strftime('%a %b %-d')}",

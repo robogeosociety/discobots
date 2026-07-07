@@ -13,8 +13,8 @@
 #   (maps to the discokit.tokens palette — the dot in the Discord panel).
 
 [meta]
-title = "fleet status"
-tagline = "the Discord agent fleet — bots, collectors, data, graphs"
+title = "discobots"
+tagline = "Tommy's Discord bots — sessions, collectors, data, graphs"
 wiki_url = "https://tommys-mac-mini.tail59a169.ts.net:5193/discobots/docs/fleet-status"
 routing_note = "webhook URLs live in grafana/.env on the mini (the routing SSOT); one feed → one channel."
 

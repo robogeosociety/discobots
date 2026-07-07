@@ -34,14 +34,14 @@ def _fetch(path):
     return {"workflow_runs": [{"conclusion": "failure"}]}
 
 
-def test_next_fleet_sync_is_monday_0717_utc():
-    nxt = dc.next_fleet_sync(NOW)
+def test_next_repo_sync_is_monday_0717_utc():
+    nxt = dc.next_repo_sync(NOW)
     assert (nxt.weekday(), nxt.hour, nxt.minute) == (0, 7, 17)
     assert nxt > NOW and (nxt - NOW).days < 7
 
     # ON a Monday after 07:17 it rolls to the following week
     monday_later = datetime(2026, 7, 6, 8, 0, tzinfo=timezone.utc)
-    assert (dc.next_fleet_sync(monday_later) - monday_later).days >= 6
+    assert (dc.next_repo_sync(monday_later) - monday_later).days >= 6
 
 
 def test_checkin_embed_carries_all_four_sections():
@@ -51,7 +51,7 @@ def test_checkin_embed_carries_all_four_sections():
     assert "Merged since last check-in (1)" in d and "Ship the heartbeat" in d
     assert "CI on main (1/2 green)" in d and "🔴 supervisor" in d
     assert "Open human tasks (1)" in d and "Grant cron FDA" in d
-    assert "fleet-sync <t:" in d
+    assert "repo-sync <t:" in d
     assert embed["title"].startswith("☕ Dev check-in")
 
 

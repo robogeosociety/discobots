@@ -56,7 +56,7 @@ just autodeploy-uninstall   # remove it
 data sources, graph kit). `fleet_status.py` renders it to both the pinned
 **#discobots** Discord panel and `docs/fleet-status.md` (the dev-wiki page); a test
 (`test_committed_page_is_in_sync`) welds the two. The CD poller repaints the panel
-on every deploy, so the board tracks the fleet automatically.
+on every deploy, so the board tracks discobots automatically.
 
 **One-time hands (needs `MANAGE_WEBHOOKS`):** create the **#discobots** channel +
 a webhook, and add `DISCORD_WEBHOOK_DISCOBOTS=…` to `~/dev/observability/grafana/.env`

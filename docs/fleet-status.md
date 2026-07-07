@@ -1,6 +1,6 @@
-# 🛰️ fleet status
+# 🛰️ discobots
 
-_the Discord agent fleet — bots, collectors, data, graphs_
+_Tommy's Discord bots — sessions, collectors, data, graphs_
 
 > This page is generated from `ops/fleet.toml` and mirrors the pinned **#discobots** Discord panel (refreshed by CI/CD on every deploy). The live telemetry is elsewhere in Discord — **#ops** (loop + supervisor), **#ops-watcher** (dev status), **#transit** (lines). This board is the directory.
 

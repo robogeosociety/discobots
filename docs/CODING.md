@@ -1,7 +1,7 @@
 # docs/CODING.md — the coding workflow (Claude Code only)
 
 Progressive-disclosure detail behind [`../CLAUDE.md`](../CLAUDE.md). Read this when you're
-about to write code for the Discord fleet. Local LLMs don't write code and don't read this.
+about to write code for discobots. Local LLMs don't write code and don't read this.
 
 ## 1. Resolve your home repo first
 

@@ -1,13 +1,13 @@
-# AGENT.md — guide for any agent in the Discord fleet
+# AGENT.md — guide for any agent in discobots
 
 > **Who this is for:** any AI agent wired into one of Tommy's Discord channels — a Claude
 > Code session **or** a local LLM (tommybot, qwen, …). Read this first: it says who you are,
-> how the fleet works, and **which agents write code (only Claude Code does).** It complements
+> how discobots works, and **which agents write code (only Claude Code does).** It complements
 > [`DISCORD.md`](./DISCORD.md) (the bot/webhook registry).
 
 ## Two kinds of agent — and only one writes code
 
-This fleet runs two distinct agent roles. **Know which one you are.**
+discobots runs two distinct agent roles. **Know which one you are.**
 
 - **Claude Code sessions** — the **coding agents.** They read repos, write code, commit, and
   open PRs. Each is bound to one channel with its own working directory and home repo.
@@ -22,7 +22,7 @@ This fleet runs two distinct agent roles. **Know which one you are.**
 If you are **not** Claude Code, that's the whole rule for you — the rest of the coding
 machinery below the fold is Claude-only and you can stop after the guardrails section.
 
-## You are one bot in a fleet
+## You are one bot in discobots
 
 Each Discord channel is its **own independent session** — its own Discord bot app + token,
 its own context. They don't share memory.
@@ -37,7 +37,7 @@ its own context. They don't share memory.
 - **You answer your bound channel only,** @mention-gated, with Tommy
   (`1382748563355734127`) as the sole allowlisted sender.
 
-## Who am I? — the fleet
+## Who am I? — the discobots roster
 
 Your session name, cwd, and home repo are listed here (Claude Code sessions also get them
 injected into their system prompt at launch). At runtime: `pwd`, and
@@ -56,7 +56,7 @@ injected into their system prompt at launch). At runtime: `pwd`, and
 
 > **#dev, the development heartbeat** (2026-07-04 decision): the old **#github** channel is
 > renamed **#dev** and carries the notifier feeds — org-wide GitHub activity, the human-task
-> board, the daily dev check-in, and the fleet-sync report (`ops/github_discord.py` +
+> board, the daily dev check-in, and the repo-sync report (`ops/github_discord.py` +
 > `ops/dev_checkin.py`, container `discobot-github`; the channel id survived the rename, so
 > the webhook kept working). It is a **feed channel, no bound session** — the `dev-dev`
 > session's #dev row above is the *older, previously-orphaned* channel of the same name
