@@ -78,12 +78,14 @@ fleet *args:
 run-now bot:
     #!/usr/bin/env bash
     set -euo pipefail
+    c=discobot-{{bot}}
     case "{{bot}}" in
       digest) s=digest.py;; github) s=github_discord.py;; transit) s=transit_discord.py;;
       skills) s=skills_discord.py;;
+      checkin) s=dev_checkin.py; c=discobot-github;;
       watcher|live|dashboard|loop|embed) echo "{{bot}} is a daemon — use \`just logs {{bot}}\` (or \`just dry {{bot}}\` to preview)" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
-    ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s"
+    ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec $c python /app/$s"
 
 # Fire the skills bot's daily 💡 spotlight once now (posts an existing skill).
 spotlight:
@@ -119,8 +121,10 @@ autodeploy-uninstall:
 dry bot:
     #!/usr/bin/env bash
     set -euo pipefail
+    c=discobot-{{bot}}
     case "{{bot}}" in
       digest) s=digest.py; f=--dry-run;; github) s=github_discord.py; f=--dry;;
+      checkin) s=dev_checkin.py; f=--dry; c=discobot-github;;
       transit) s=transit_discord.py; f=--dry;; skills) s=skills_discord.py; f=--dry;;
       live) s=live_service.py; f="--dry --once";;
       dashboard) s=ops_dashboard.py; f="--dry --demo";;
@@ -129,7 +133,7 @@ dry bot:
       chat) s=chat_dashboard.py; f="--dry --demo";;
       watcher) echo "watcher is a daemon — use \`just logs watcher\`" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
-    ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec discobot-{{bot}} python /app/$s $f"
+    ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec $c python /app/$s $f"
 
 # Prove the remote engine is reachable from the Air.
 doctor:

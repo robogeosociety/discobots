@@ -85,11 +85,12 @@ start_digest() {
 }
 
 start_github() {
-  # Prefer a dedicated #github webhook (DISCORD_WEBHOOK_GITHUB) so PR events land
-  # in #github instead of the shared #ops feed; falls back to the general webhook
-  # (→ #ops, today's behaviour) until that key exists in grafana/.env.
+  # The #dev heartbeat (né #github — the channel id survived the rename).
+  # Prefer DISCORD_WEBHOOK_DEV, then the legacy DISCORD_WEBHOOK_GITHUB (same
+  # channel, pre-rename key), then the general webhook (→ #ops).
   local webhook ghtoken
-  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_GITHUB)"
+  webhook="$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_DEV)"
+  webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_GITHUB)}"
   webhook="${webhook:-$(dotget "$GRAFANA_ENV" DISCORD_WEBHOOK_URL)}"
   ghtoken="$(gh auth token 2>/dev/null || true)"
   [ -n "$webhook" ] || { echo "github: DISCORD_WEBHOOK_URL missing in grafana/.env" >&2; return 1; }
@@ -99,7 +100,7 @@ start_github() {
     -e "DISCORD_WEBHOOK_URL=$webhook" -e "GH_TOKEN=$ghtoken" \
     -v discobot-github-state:/root/.local/share/github-discord \
     discobot-github:latest >/dev/null
-  echo "started discobot-github (every 30 min; state in volume discobot-github-state)"
+  echo "started discobot-github (#dev heartbeat: every 30 min + daily 08:00 check-in; state in volume discobot-github-state)"
 }
 
 start_watcher() {

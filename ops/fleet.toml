@@ -53,9 +53,9 @@ status = "operational"
 
 [[bots]]
 name = "github"
-channel = "#github"
-cadence = "every 30 min"
-what = "new GitHub activity across the robogeosociety org (PRs, pushes)"
+channel = "#dev"
+cadence = "every 30 min + daily 08:00 PT check-in"
+what = "dev heartbeat — org GitHub activity (PRs, red CI, releases, issues), human-task board, daily check-in"
 repo = "discobots"
 status = "operational"
 
@@ -99,7 +99,7 @@ status = "operational"
 [[collectors]]
 name = "github"
 source = "GitHub API"
-into = "#github + changelog + daily notes"
+into = "#dev + changelog + daily notes"
 status = "operational"
 
 [[collectors]]
