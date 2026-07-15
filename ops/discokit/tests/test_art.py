@@ -68,3 +68,51 @@ def test_melee_dock_fits_the_grid_contract():
     assert len(lines) == 18
     assert max(len(line) for line in lines) <= 64
     assert "@" in scene  # the one light source exists
+
+
+# ── the scene register + mechanical grammar (Phase 1, Monkey Island UI) ──────
+
+
+def test_scene_registry_renders_guide_compliant():
+    for name, fn in art.SCENES.items():
+        scene = fn()
+        assert scene.strip(), name
+        assert art.check(scene) == [], (name, art.check(scene))
+        assert art.CAPTIONS[name].strip(), name
+
+
+def test_captions_stay_out_of_the_scene_register():
+    # captions are prose (diacritics allowed); scenes stay pure ASCII
+    for name, fn in art.SCENES.items():
+        assert all(ord(ch) < 128 for ch in fn()), name
+
+
+def test_dock_dawn_reads_dawn():
+    scene = art.dock_dawn()
+    assert "(@@@@)" in scene  # the risen sun
+    assert "@" not in "\n".join(scene.splitlines()[:3])  # no moon in the high sky
+    assert "v" in scene  # the gulls
+
+
+def test_ship_underway_reads_from_outline():
+    scene = art.ship_underway()
+    assert "|##\\" in scene  # the rigged mainmast survives the light pass
+    assert "\\############/" in scene  # the hull mass, freeboard and all
+    assert "@" in scene  # the stern lantern
+
+
+def test_scene_for_maps_states_and_defaults_to_stable():
+    for state, name in (("stable", "melee_dock"), ("deployed", "ship_underway"), ("recovered", "dock_dawn")):
+        scene, caption = art.scene_for(state)
+        assert caption == art.CAPTIONS[name], state
+        assert art.check(scene) == [], state
+    assert art.scene_for("no-such-state")[1] == art.CAPTIONS["melee_dock"]
+
+
+def test_check_flags_each_banned_register():
+    assert art.check("▓▒░") != []  # ANSI/DOS blocks — graph.py's genre
+    assert art.check("x" * 81) != []  # wider than the grid contract
+    assert art.check("\n".join("." for _ in range(26))) != []  # taller
+    assert art.check("🔥🌙⭐") != []  # three accents past the budget
+    assert art.check("🔥🌙") == []  # two accents IS the budget
+    assert art.check(art.RAMP.strip()) != []  # the full 9-glyph ramp — no subset restraint

@@ -1,6 +1,6 @@
 ---
 type: proposal
-implemented_by: []
+implemented_by: [46, "obsidian-automations#232"]
 tracking: 0
 ---
 
@@ -56,6 +56,11 @@ asserts — grid ≤ 80×25, ≤ 7 ramp glyphs per scene, ≤ 2 emoji accents, n
 box-drawing. Those asserts are the same **eval grammar** Phase 5 reuses as LoRA
 fitness. **Checkpoint A:** the new scenes post to #ops round-style (desktop +
 phone, like round D on #20) for Tommy's verdict before anything wires up.
+*Round-A outcome (2026-07-04):* `melee_dock`, `dock_dawn` and all captions
+passed; `ship_underway` shipped after one silhouette pass. **The register is a
+live-prototype lane** — the braille/graph data register stays every surface's
+stable default, and further scene-quality iteration belongs to Phase 5's LoRA
+loop, not manual rounds.
 
 ### Phase 2 — the Discord moments (`discobots` · ops)
 The **weekly digest** (`ops/digest.py:270`) opens with a scene, its sky picked by
@@ -142,6 +147,8 @@ their own looks — this theme is the *dev* wiki's identity.
 
 Each phase is one PR in its home repo, independently shippable, degradable, and
 **gated on its art checkpoint** — ambiguous taste calls resolve by asking Tommy,
-defaulting to the narrower option. Order: **1 → 2 → 3 → 4 → 5** (P4 needs only
-P1, so it may run parallel to P2/P3 if scheduling favours it; the cutover still
-waits for checkpoint D). `implemented_by` tracks the PRs as they open.
+defaulting to the narrower option. Order: **1 → 4 → 2 → 3 → 5** — reordered
+2026-07-04: the wiki theme comes first (CSS/Jinja chrome is the fastest surface
+to nail right away), the Discord moments ride the prototype lane behind it, and
+the cutover still gates on checkpoint D. `implemented_by` tracks the PRs as
+they open.
