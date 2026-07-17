@@ -49,10 +49,7 @@ jobs:
           GH_WEBHOOK_SECRET: ${{ secrets.GH_WEBHOOK_SECRET }}
           GH_APP_ID: "4327530"
         run: |
-          SUB=$(curl -sf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
-            | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['subdomain'])")
-          URL="https://deploy-gate.$SUB.workers.dev/github"
+          URL="https://deploy-gate.tommy-b-doerr.workers.dev/github"
           b64url(){ openssl base64 -A | tr '+/' '-_' | tr -d '='; }
           NOW=$(date +%s)
           HDR=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
@@ -60,7 +57,14 @@ jobs:
           KEYF=$(mktemp); printf '%s' "$APP_PRIVATE_KEY" > "$KEYF"
           SIG=$(printf '%s.%s' "$HDR" "$PAY" | openssl dgst -sha256 -sign "$KEYF" -binary | b64url)
           rm -f "$KEYF"
-          curl -sf -X PATCH -H "Authorization: Bearer $HDR.$PAY.$SIG" \
+          OUT=$(mktemp)
+          CODE=$(curl -s -o "$OUT" -w '%{http_code}' -X PATCH \
+            -H "Authorization: Bearer $HDR.$PAY.$SIG" \
             -H "Accept: application/vnd.github+json" https://api.github.com/app/hook/config \
-            -d "{\"url\":\"$URL\",\"secret\":\"$GH_WEBHOOK_SECRET\",\"content_type\":\"json\"}" >/dev/null
+            -d "{\"url\":\"$URL\",\"secret\":\"$GH_WEBHOOK_SECRET\",\"content_type\":\"json\"}")
+          if [ "$CODE" != 200 ]; then
+            echo "hook config PATCH failed: HTTP $CODE"
+            sed 's/[A-Za-z0-9_-]\{30,\}/…/g' "$OUT"   # redact any long token-like strings
+            exit 1
+          fi
           echo "webhook → $URL"
