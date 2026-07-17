@@ -1,0 +1,66 @@
+# deploy-gate Worker CD — wrangler deploy + secret sync + Discord command
+# registration + GitHub-app webhook config. Cloud-native: GitHub-hosted runner,
+# no mini involvement (robogeosociety/robot-geographical-society#167 WS0/WS2).
+name: deploy-gate
+on:
+  push:
+    branches: [main]
+    paths: ["workers/deploy-gate/**", ".github/workflows/deploy-gate.yml"]
+  workflow_dispatch:
+
+concurrency: deploy-gate
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run: { working-directory: workers/deploy-gate }
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+
+      - name: wrangler deploy
+        run: npx wrangler@4 deploy
+
+      - name: sync Worker secrets
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          GH_WEBHOOK_SECRET: ${{ secrets.GH_WEBHOOK_SECRET }}
+        run: |
+          printf '%s' "$DISCORD_BOT_TOKEN" | npx wrangler@4 secret put DISCORD_BOT_TOKEN
+          printf '%s' "$APP_PRIVATE_KEY" | openssl pkcs8 -topk8 -nocrypt | npx wrangler@4 secret put GH_APP_PRIVATE_KEY_PKCS8
+          printf '%s' "$GH_WEBHOOK_SECRET" | npx wrangler@4 secret put GH_WEBHOOK_SECRET
+
+      - name: register /deploy command
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_APPLICATION_ID: "1527798215145951405"
+        run: node register-commands.mjs
+
+      - name: point the GitHub-app webhook at the Worker
+        env:
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          GH_WEBHOOK_SECRET: ${{ secrets.GH_WEBHOOK_SECRET }}
+          GH_APP_ID: "4327530"
+        run: |
+          SUB=$(curl -sf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" \
+            | python3 -c "import json,sys;print(json.load(sys.stdin)['result']['subdomain'])")
+          URL="https://deploy-gate.$SUB.workers.dev/github"
+          b64url(){ openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+          NOW=$(date +%s)
+          HDR=$(printf '{"alg":"RS256","typ":"JWT"}' | b64url)
+          PAY=$(printf '{"iat":%d,"exp":%d,"iss":"%s"}' $((NOW-30)) $((NOW+540)) "$GH_APP_ID" | b64url)
+          KEYF=$(mktemp); printf '%s' "$APP_PRIVATE_KEY" > "$KEYF"
+          SIG=$(printf '%s.%s' "$HDR" "$PAY" | openssl dgst -sha256 -sign "$KEYF" -binary | b64url)
+          rm -f "$KEYF"
+          curl -sf -X PATCH -H "Authorization: Bearer $HDR.$PAY.$SIG" \
+            -H "Accept: application/vnd.github+json" https://api.github.com/app/hook/config \
+            -d "{\"url\":\"$URL\",\"secret\":\"$GH_WEBHOOK_SECRET\",\"content_type\":\"json\"}" >/dev/null
+          echo "webhook → $URL"
