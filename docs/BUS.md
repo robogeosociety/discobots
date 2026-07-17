@@ -31,10 +31,12 @@ into each other**: publish is fire-and-forget, consumers read independently.
 
 **Valkey** (Redis-compatible, BSD-3) — one service covers all three needs:
 `PUBLISH/SUBSCRIBE` (telemetry fan-out), `SET … EX` (retained last-value), and
-Streams + consumer groups (durable events with replay). It runs as one
-supervised `service` — on the mini today (`discobot-valkey`, loopback-only), and
-it belongs in the fleet supervisor's `REGISTRY` when that lands (supervision
-integrates upward; execution stays each loop's own process).
+Streams + consumer groups (durable events with replay). The broker
+(`discobot-valkey`) is **declarative IaC** — Terraform in `dev/infra/valkey/`
+(the `kreuzwerker/docker` provider) owns the container, the `fleet-bus` network,
+and the data volume, since the bus is shared fleet infrastructure rather than any
+one loop's. `cd dev/infra/valkey && make apply` on the mini manages it. It's
+Telegraf-monitored (observability-config: `inputs.redis` → the `system` bucket).
 
 - **Connection:** `BUS_URL` (or `DISCOBOTS_BUS_URL`). Containers share an
   external Docker network (`fleet-bus`) and address the broker by **name** —

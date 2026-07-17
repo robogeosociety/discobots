@@ -41,30 +41,15 @@ hostify() { sed -e "s#//localhost#//$HOSTGW#g" -e "s#//127\.0\.0\.1#//$HOSTGW#g"
 
 common_run=(--restart unless-stopped --add-host "$HOSTGW:host-gateway" -e "TZ=$TZ_VAL")
 
-# The shared bus network: bus producers/consumers (valkey, live) join it and
-# address the broker by container name — a loopback-published port isn't
-# reachable cross-container, so a user-defined network + DNS is the private,
-# no-exposure way. Idempotent; the obsidian-automations supervisor compose joins
-# the SAME external network (fleet-bus) to reach discobot-valkey by name.
+# The shared bus network. The broker itself (discobot-valkey) is declarative IaC
+# now — Terraform in `dev/infra/valkey/` owns the fleet-bus network, the volume,
+# and the container (the bus is shared fleet infra, not a discobot). `live` still
+# joins the network by name and addresses the broker at redis://discobot-valkey:6379.
+# ensure_bus_net stays as an idempotent safety so `just up live` never fails on a
+# missing network (it no-ops when Terraform's network already exists); it is NOT
+# the declared owner.
 BUS_NET="fleet-bus"
 ensure_bus_net() { docker network inspect "$BUS_NET" >/dev/null 2>&1 || docker network create "$BUS_NET" >/dev/null; }
-
-start_valkey() {
-  # The fleet message bus (docs/BUS.md) — a Valkey (BSD Redis) broker the loops
-  # publish/subscribe through, on the shared `fleet-bus` network (reached by name,
-  # `redis://discobot-valkey:6379`). Also published to the mini's LOOPBACK for
-  # host-side debugging (redis-cli / the discokit.bus CLI). Data volume keeps
-  # streams across restarts; a bus outage just degrades consumers to direct
-  # polling. Ownership moves to the fleet supervisor's REGISTRY when that lands.
-  ensure_bus_net
-  docker rm -f discobot-valkey >/dev/null 2>&1 || true
-  docker run -d --name discobot-valkey --restart unless-stopped \
-    --network "$BUS_NET" \
-    -p 127.0.0.1:6379:6379 \
-    -v discobot-valkey-data:/data \
-    valkey/valkey:8-alpine valkey-server --save 60 1000 --appendonly no >/dev/null
-  echo "started discobot-valkey (fleet message bus; network $BUS_NET + loopback :6379; data in volume discobot-valkey-data)"
-}
 
 start_digest() {
   local url token org webhook
@@ -308,14 +293,15 @@ start_embed() {
 }
 
 bots=("$@")
-# Default set: `valkey` (the message bus) comes up first so `live` finds it;
-# `live` replaces the three standalone dashboard daemons (dashboard/loop/embed),
-# and `transit-panel` (one edited #transit message) replaces `transit` (the
-# per-alert firehose). All replaced daemons stay start-able by name for rollback.
-[ ${#bots[@]} -eq 0 ] && bots=(valkey digest github watcher opswatcher transit-panel skills live)
+# Default set: `live` replaces the three standalone dashboard daemons
+# (dashboard/loop/embed), and `transit-panel` (one edited #transit message)
+# replaces `transit` (the per-alert firehose). All replaced daemons stay
+# start-able by name for rollback. The message bus (discobot-valkey) is NOT here —
+# it's declarative IaC in dev/infra/valkey (Terraform); `just up` drives the bots,
+# `terraform apply` in that root manages the broker.
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher opswatcher transit-panel skills live)
 for b in "${bots[@]}"; do
   case "$b" in
-    valkey)    start_valkey ;;
     digest)    start_digest ;;
     github)    start_github ;;
     watcher)   start_watcher ;;
