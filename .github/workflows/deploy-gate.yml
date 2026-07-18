@@ -32,7 +32,9 @@ jobs:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           GH_WEBHOOK_SECRET: ${{ secrets.GH_WEBHOOK_SECRET }}
+          DG_REQUEST_SECRET: ${{ secrets.DG_REQUEST_SECRET }}
         run: |
+          printf '%s' "$DG_REQUEST_SECRET" | npx wrangler@4 secret put DG_REQUEST_SECRET
           printf '%s' "$DISCORD_BOT_TOKEN" | npx wrangler@4 secret put DISCORD_BOT_TOKEN
           printf '%s' "$APP_PRIVATE_KEY" | openssl pkcs8 -topk8 -nocrypt | npx wrangler@4 secret put GH_APP_PRIVATE_KEY_PKCS8
           printf '%s' "$GH_WEBHOOK_SECRET" | npx wrangler@4 secret put GH_WEBHOOK_SECRET
