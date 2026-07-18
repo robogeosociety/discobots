@@ -1,0 +1,31 @@
+name = "skills-feed"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+workers_dev = true
+
+[triggers]
+# Two beats, one Worker (src/index.js dispatches on the cron expression):
+#   0 */3 * * *  — announce new fleet skills (the container's every-3-h check)
+#   33 16 * * *  — the daily 💡 spotlight. UTC-only crons: 16:33 UTC ≈ the
+#                  container's 09:30 PT; drifts to 08:33 PT under winter PST
+#                  (accepted, same policy as github-heartbeat's check-in). The
+#                  :33 offset keeps it off the 3-hourly tick so the two beats
+#                  never race the shared KV state doc.
+crons = ["0 */3 * * *", "33 16 * * *"]
+
+# Two keys in one namespace:
+#   inventory — WRITTEN by the mini-side publisher (robogeosociety/supervisor's
+#               `skills-inventory` job) via the Cloudflare KV API; read here.
+#   state     — owned here: known skills + spotlight rotation + channel id.
+# The namespace id is resolved/created by the CD workflow
+# (.github/workflows/skills-feed.yml) and substituted at deploy time — never
+# edit the placeholder by hand.
+[[kv_namespaces]]
+binding = "STATE"
+id = "KV_NAMESPACE_ID_PLACEHOLDER"
+
+[vars]
+SKILLS_CHANNEL = "skills"
+
+# Secrets (pushed by .github/workflows/skills-feed.yml, never committed):
+#   DISCORD_BOT_TOKEN — posts the 🆕 / 💡 embeds to #skills
