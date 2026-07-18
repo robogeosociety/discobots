@@ -147,19 +147,60 @@ async function verifyDiscord(request, env, bodyText) {
   return crypto.subtle.verify("Ed25519", key, hexToBytes(sig), enc.encode(ts + bodyText));
 }
 
-async function verifyGithub(request, env, bodyText) {
-  const sig = request.headers.get("x-hub-signature-256");
-  if (!sig?.startsWith("sha256=")) return false;
+async function hmacHex(secret, text) {
   const key = await crypto.subtle.importKey(
-    "raw", enc.encode(env.GH_WEBHOOK_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
   );
-  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(bodyText)));
-  const expected = [...mac].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(text)));
+  return [...mac].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifyHmacHeader(request, header, secret, bodyText) {
+  const sig = request.headers.get(header);
+  if (!sig?.startsWith("sha256=")) return false;
+  const expected = await hmacHex(secret, bodyText);
   const given = sig.slice(7);
   if (expected.length !== given.length) return false;
   let diff = 0;
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ given.charCodeAt(i);
   return diff === 0;
+}
+
+// ── dispatch lane (private repos — no env protection rules without Enterprise) ──
+
+// nonce binds an approval to exactly one (repo, run, tag, sha) tuple
+function nonceText(repo, runId, tag, sha) {
+  return `${repo}|${runId}|${tag}|${sha}`;
+}
+
+async function postDispatchCard(env, req) {
+  const { repo, run_id: runId, sha, tag = "-" } = req;
+  const runUrl = `https://github.com/${env.GH_ORG}/${repo}/actions/runs/${runId}`;
+  const channel = await deployChannelId(env);
+  await discord(env, "POST", `/channels/${channel}/messages`, {
+    embeds: [{
+      title: `🚦 deploy pending — ${repo} → mini`,
+      description: `[workflow run ${runId}](${runUrl})\ntag \`${tag}\` · sha \`${(sha || "").slice(0, 12)}\``,
+      color: 0xe8a33d,
+    }],
+    components: [{
+      type: 1,
+      components: [
+        { type: 2, style: 3, label: "Approve", custom_id: `dgd|a|${repo}|${runId}|${tag}|${sha}` },
+        { type: 2, style: 4, label: "Reject", custom_id: `dgd|r|${repo}|${runId}|${tag}|${sha}` },
+      ],
+    }],
+  });
+}
+
+async function fireDeployDispatch(env, repo, runId, tag, sha) {
+  const token = await installationToken(env, repo);
+  const nonce = await hmacHex(env.DG_REQUEST_SECRET, nonceText(repo, runId, tag, sha));
+  const res = await gh(env, token, "POST", `/repos/${env.GH_ORG}/${repo}/dispatches`, {
+    event_type: "deploy-approved",
+    client_payload: { tag, sha, run_id: runId, nonce },
+  });
+  if (res.status !== 204) throw new Error(`dispatch ${res.status}: ${(await res.text()).slice(0, 150)}`);
 }
 
 // ── interaction handling ─────────────────────────────────────────────────────
@@ -179,6 +220,29 @@ async function handleInteraction(env, interaction) {
     return json({ type: 4, data: { content: "⛔ you are not on the approver list", flags: 64 } });
   }
   const who = interaction.member?.user?.username || interaction.user?.username || actorId(interaction);
+
+  // Button click on a dispatch-lane card (private repos)
+  if (interaction.type === 3 && interaction.data.custom_id?.startsWith("dgd|")) {
+    const [, act, repo, runId, tag, sha] = interaction.data.custom_id.split("|");
+    if (act === "a") {
+      try {
+        await fireDeployDispatch(env, repo, runId, tag, sha);
+      } catch (e) {
+        return json({ type: 4, data: { content: `❌ ${e.message}`, flags: 64 } });
+      }
+    }
+    const verdict = act === "a" ? "✅ approved" : "🛑 rejected";
+    const orig = interaction.message.embeds?.[0] || {};
+    return json({
+      type: 7,
+      data: {
+        embeds: [{ ...orig, color: act === "a" ? 0x3d9970 : 0xcc4444,
+          title: (orig.title || "").replace("🚦 deploy pending", verdict) }],
+        components: [],
+        content: `${verdict} by **${who}**${act === "a" ? " — deploy-exec dispatched" : ""}`,
+      },
+    });
+  }
 
   // Button click on a pending card
   if (interaction.type === 3 && interaction.data.custom_id?.startsWith("dg|")) {
@@ -232,8 +296,16 @@ export default {
       return handleInteraction(env, JSON.parse(bodyText));
     }
 
+    if (url.pathname === "/request") {
+      if (!(await verifyHmacHeader(request, "x-request-signature", env.DG_REQUEST_SECRET, bodyText))) return new Response("bad signature", { status: 401 });
+      const req = JSON.parse(bodyText);
+      if (!req.repo || !req.run_id || !req.sha) return new Response("missing fields", { status: 400 });
+      ctx.waitUntil(postDispatchCard(env, req));
+      return json({ ok: true });
+    }
+
     if (url.pathname === "/github") {
-      if (!(await verifyGithub(request, env, bodyText))) return new Response("bad signature", { status: 401 });
+      if (!(await verifyHmacHeader(request, "x-hub-signature-256", env.GH_WEBHOOK_SECRET, bodyText))) return new Response("bad signature", { status: 401 });
       const event = request.headers.get("x-github-event");
       if (event === "deployment_protection_rule") {
         const p = JSON.parse(bodyText);
