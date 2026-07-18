@@ -20,10 +20,17 @@
 //   • State (the seen-id gate + the human-task board snapshot) lives in KV
 //     under one key, mirroring discokit.notify's StateFile/ChangeFeed shapes.
 //
-// The daily 08:00 PT check-in (ops/dev_checkin.py) is NOT lifted here — it is
-// the planned second cron on this Worker.
+// Second cron (daily 15:00 UTC): the dev check-in — the Workers port of
+// ops/dev_checkin.py's template-rendered morning status embed (PRs merged
+// since the last check-in, CI health chips, the open human-task queue,
+// upcoming repo-sync). The two beats share auth, scans, posting, and the one
+// KV state doc; `controller.cron` picks the beat.
 
 const HUMAN_TASK_LABEL = "human-task";
+const CHECKIN_CRON = "3 15 * * *"; // daily check-in; anything else = the 30-min heartbeat
+// (see wrangler.toml for the PT/DST caveat and the :03 anti-collision offset)
+const CI_HEALTH_DAYS = 7; // check-in CI chips cover repos pushed this recently
+const MAX_LIST = 8; // cap per check-in section so the embed stays one screenful
 const EVENT_MAX_AGE_HOURS = 24; // never announce older than this (fresh KV must not replay history)
 const ACTIVE_DAYS = 3; // only scan repos pushed this recently (bounds the API calls)
 const SEEN_CAP = 500; // seen-id list cap, oldest dropped (discokit.ChangeFeed)
@@ -345,6 +352,124 @@ async function scanHumanTasks(token, repos, state) {
   return embeds;
 }
 
+// ── The daily check-in (ops/dev_checkin.py's beat) ───────────────────────────
+
+const issueLine = (repoFull, it) =>
+  `• [${repoFull.split("/").pop()}#${it.number}](${it.html_url}) ${it.title || ""}`;
+
+/** PRs merged since `since` across recently-pushed repos, newest first.
+ *  (The container used the org-wide search API — user-token territory; a merge
+ *  always bumps the repo's pushed_at, so a pushed-since repo walk sees them.) */
+async function mergedPrsSince(token, repos, since) {
+  const merged = [];
+  for (const repo of repos) {
+    if ((parseTs(repo.pushed_at) || 0) < since) continue;
+    const prs = await gh(
+      token,
+      `/repos/${repo.full_name}/pulls?state=closed&sort=updated&direction=desc&per_page=30`,
+    );
+    for (const pr of prs || []) {
+      const mergedAt = parseTs(pr.merged_at);
+      if (mergedAt && mergedAt >= since) merged.push({ repo: repo.full_name, mergedAt, pr });
+    }
+  }
+  merged.sort((a, b) => b.mergedAt - a.mergedAt);
+  return merged;
+}
+
+/** (repo name, ✅/🔴/⚪ chip) for each repo pushed within CI_HEALTH_DAYS, from
+ *  the latest completed default-branch run. */
+async function ciHealth(token, repos, now) {
+  const cutoff = now - CI_HEALTH_DAYS * 86_400_000;
+  const chips = [];
+  for (const repo of repos) {
+    if ((parseTs(repo.pushed_at) || 0) < cutoff) continue;
+    const branch = repo.default_branch || "main";
+    const runs = await gh(
+      token,
+      `/repos/${repo.full_name}/actions/runs?branch=${branch}&status=completed&per_page=1`,
+    );
+    const conclusion = runs?.workflow_runs?.[0]?.conclusion;
+    chips.push([repo.name, conclusion == null ? "⚪" : conclusion === "success" ? "✅" : "🔴"]);
+  }
+  return chips;
+}
+
+async function openHumanTasks(token, repos) {
+  const open = [];
+  for (const repo of repos) {
+    if (!repo.has_issues) continue;
+    const items = await gh(
+      token,
+      `/repos/${repo.full_name}/issues?labels=${HUMAN_TASK_LABEL}&state=open&per_page=50`,
+    );
+    for (const it of items || []) {
+      if (!it.pull_request) open.push({ repo: repo.full_name, it });
+    }
+  }
+  return open;
+}
+
+/** The next scheduled repo-sync: Mondays 07:17 UTC (supervisor repo). */
+function nextRepoSync(now) {
+  const d = new Date(now);
+  d.setUTCHours(7, 17, 0, 0);
+  d.setUTCDate(d.getUTCDate() + ((8 - d.getUTCDay()) % 7)); // next Monday (getUTCDay: Mon = 1)
+  if (d.getTime() <= now) d.setUTCDate(d.getUTCDate() + 7);
+  return d;
+}
+
+function capped(lines, total) {
+  const out = lines.slice(0, MAX_LIST);
+  if (total > MAX_LIST) out.push(`… and ${total - MAX_LIST} more`);
+  return out;
+}
+
+async function checkin(env) {
+  const now = Date.now();
+  const token = await orgInstallationToken(env);
+  const state = await loadState(env);
+  const since = parseTs(state.doc.checkin_last_run) || now - 24 * 3_600_000;
+  const { all } = await listActiveRepos(token, now);
+
+  const sections = [];
+
+  const merged = await mergedPrsSince(token, all, since);
+  const mlines = capped(merged.map((m) => issueLine(m.repo, m.pr)), merged.length);
+  sections.push(
+    `**Merged since last check-in (${merged.length})**\n` +
+      (mlines.join("\n") || "• a quiet stretch — nothing merged"),
+  );
+
+  const chips = await ciHealth(token, all, now);
+  const red = chips.filter(([, c]) => c === "🔴").map(([name, c]) => `• ${c} ${name}`);
+  const green = chips.filter(([, c]) => c === "✅").length;
+  sections.push(
+    `**CI on main (${green}/${chips.length} green)**\n` + (red.join("\n") || "• all active lanes green"),
+  );
+
+  const tasks = await openHumanTasks(token, all);
+  const tlines = capped(tasks.map((t) => issueLine(t.repo, t.it)), tasks.length);
+  sections.push(`**Open human tasks (${tasks.length})**\n` + (tlines.join("\n") || "• queue clear 🎉"));
+
+  const sync = nextRepoSync(now);
+  sections.push(`**Upcoming**\n• repo-sync <t:${Math.floor(sync.getTime() / 1000)}:F> (supervisor, mini-fleet runner)`);
+
+  const day = new Date(now).toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric", timeZone: "America/Los_Angeles",
+  });
+  await postEmbeds(env, [{
+    title: `☕ Dev check-in — ${day}`,
+    description: sections.join("\n\n"),
+    color: COLOR_ISSUE, // INFO blue, the container's check-in colour
+  }]);
+
+  // After the post, like the container: a failed post keeps the window open.
+  state.doc.checkin_last_run = new Date(now).toISOString();
+  await state.save();
+  console.log(`check-in posted (window since ${new Date(since).toISOString()})`);
+}
+
 // ── The beat ─────────────────────────────────────────────────────────────────
 
 async function heartbeat(env) {
@@ -374,8 +499,9 @@ async function heartbeat(env) {
 }
 
 export default {
-  async scheduled(_controller, env, ctx) {
-    ctx.waitUntil(heartbeat(env));
+  async scheduled(controller, env, ctx) {
+    // Two beats, one Worker — the trigger's cron expression picks the beat.
+    ctx.waitUntil(controller.cron === CHECKIN_CRON ? checkin(env) : heartbeat(env));
   },
 
   // No inbound surface — the Worker is cron-driven. (Local test:

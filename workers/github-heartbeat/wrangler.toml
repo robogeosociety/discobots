@@ -4,7 +4,14 @@ compatibility_date = "2026-07-01"
 workers_dev = true
 
 [triggers]
-crons = ["*/30 * * * *"]
+# Two beats, one Worker (src/index.js dispatches on the cron expression):
+#   */30       — the #dev heartbeat (org activity / red CI / human-task board)
+#   3 15 * * * — the daily dev check-in. Workers crons are UTC-only: ~15:00 UTC
+#                = 08:00 PDT; across DST (Nov–Mar, PST) it lands 07:00 PT —
+#                accepted drift (the container pinned TZ=America/Los_Angeles, a
+#                luxury cron triggers don't have). The :03 offset keeps it off
+#                the */30 tick so the two beats never race the shared KV doc.
+crons = ["*/30 * * * *", "3 15 * * *"]
 
 # The seen-id gate + human-task board snapshot (one JSON doc under the "state"
 # key). The namespace id is resolved/created by the CD workflow
