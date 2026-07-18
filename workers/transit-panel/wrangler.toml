@@ -1,0 +1,25 @@
+name = "transit-panel"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+workers_dev = true
+
+[triggers]
+# Every minute — the container polled OneBusAway on a 60 s interval; a Workers
+# cron's floor is exactly that. An all-quiet tick makes no Discord call and no
+# KV write (content-hash reconcile), so the beat is cheap.
+crons = ["* * * * *"]
+
+# Panel state (message id + content signature + changed-at + last-good alerts +
+# resolved channel id, one JSON doc under the "state" key). The namespace id is
+# resolved/created by the CD workflow (.github/workflows/transit-panel.yml) and
+# substituted at deploy time — never edit the placeholder by hand.
+[[kv_namespaces]]
+binding = "STATE"
+id = "KV_NAMESPACE_ID_PLACEHOLDER"
+
+[vars]
+TRANSIT_CHANNEL = "transit"
+
+# Secrets (pushed by .github/workflows/transit-panel.yml, never committed):
+#   DISCORD_BOT_TOKEN — edits the #transit panel message in place
+#   OBA_API_KEY       — OneBusAway GTFS-RT alerts feed key
