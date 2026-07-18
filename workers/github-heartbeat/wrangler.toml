@@ -1,0 +1,24 @@
+name = "github-heartbeat"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+workers_dev = true
+
+[triggers]
+crons = ["*/30 * * * *"]
+
+# The seen-id gate + human-task board snapshot (one JSON doc under the "state"
+# key). The namespace id is resolved/created by the CD workflow
+# (.github/workflows/github-heartbeat.yml) and substituted at deploy time —
+# never edit the placeholder by hand.
+[[kv_namespaces]]
+binding = "STATE"
+id = "KV_NAMESPACE_ID_PLACEHOLDER"
+
+[vars]
+GH_ORG = "robogeosociety"
+HEARTBEAT_CHANNEL = "dev"
+GH_APP_ID = "4327530"
+
+# Secrets (pushed by .github/workflows/github-heartbeat.yml, never committed):
+#   DISCORD_BOT_TOKEN         — posts the heartbeat embeds to #dev
+#   GH_APP_PRIVATE_KEY_PKCS8  — rgs-deploy-gate app key (PKCS#8) for JWT auth
