@@ -25,7 +25,7 @@ RUN chmod +x /usr/local/bin/supercronic
 
 WORKDIR /app
 # All bot scripts live in one base image; each per-bot image just selects one.
-COPY digest.py transit_discord.py transit_dashboard.py github_discord.py dev_checkin.py watcher.py skills_discord.py ops_dashboard.py loop_dashboard.py embed_dashboard.py chat_dashboard.py live_service.py fleet_status.py fleet.toml /app/
+COPY digest.py transit_discord.py transit_dashboard.py github_discord.py dev_checkin.py watcher.py skills_discord.py ops_dashboard.py loop_dashboard.py embed_dashboard.py chat_dashboard.py live_service.py minimem.py orbmem.py claude_heatmap.py fleet_status.py fleet.toml /app/
 # discokit — the shared design-language kit (tokens/config/poster/notify/
 # dashboard/guard). Every bot imports it since the Phase-1 migration.
 COPY discokit/ /app/discokit/

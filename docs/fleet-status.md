@@ -15,6 +15,9 @@ _Tommy's Discord bots — sessions, collectors, data, graphs_
 | ✅ | `github` | #dev | every 30 min + daily 08:00 PT check-in | dev heartbeat — org GitHub activity (PRs, red CI, releases, issues), human-task board, daily check-in | discobots |
 | ✅ | `digest` | #ops | weekly · Mon 08:15 PT | InfluxDB health + dev-status weekly digest | discobots |
 | ✅ | `skills` | #skills | every 3h + daily 💡 spotlight | new Claude Code skills acquired across the fleet | discobots |
+| ✅ | `minimem` | #dashboards | daemon · 60s, edit-in-place | live Mac-mini memory treemap (colored-square emoji) — sibling of the Grafana mac-system treemap | discobots |
+| ✅ | `orbmem` | #dashboards | daemon · 60s, edit-in-place | live OrbStack per-container memory treemap (InfluxDB docker_container_mem) | discobots |
+| ✅ | `heatmap` | #dashboards | daemon · 60s, edit-in-place | Claude token-usage heatmap (contrib-graph style) — output tokens by project × hour | discobots |
 | ✅ | `grafana-alerting` | #alerts | on firing / resolved | platform-health alerts from Grafana's InfluxDB-backed rules | observability-config |
 
 ## 🌾 Collectors

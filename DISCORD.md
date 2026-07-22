@@ -29,7 +29,8 @@ committed here** — see `.gitignore`.
 
 | Code | Reads | Repo |
 | --- | --- | --- |
-| **`ops/`** (this repo) — `digest.py`, `github_discord.py` + `dev_checkin.py` (the #dev heartbeat: org GitHub activity, human-task board, daily check-in), `transit_discord.py`, `watcher.py`, `skills_discord.py`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env` (skills uses `DISCORD_WEBHOOK_SKILLS`; github/dev-checkin prefer `DISCORD_WEBHOOK_DEV`); digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token`; skills reads host `~/.claude/{skills,plugins}` | `robogeosociety/discobots` |
+| **`ops/`** (this repo) — `digest.py`, `github_discord.py` + `dev_checkin.py` (the #dev heartbeat: org GitHub activity, human-task board, daily check-in), `transit_discord.py`, `watcher.py`, `skills_discord.py`, and the **#dashboards live panels** `minimem.py` / `orbmem.py` / `claude_heatmap.py`. **Now containerized** (OrbStack), one container per bot, managed from the Air. See [`ops/README.md`](./ops/README.md). | webhooks from `observability/grafana/.env` (skills uses `DISCORD_WEBHOOK_SKILLS`; github/dev-checkin prefer `DISCORD_WEBHOOK_DEV`); digest also reads `ask-dash/.env` InfluxDB creds; github uses `gh auth token`; skills reads host `~/.claude/{skills,plugins}`; the **dashboards edit as OpsBot** (`DISCORD_BOT_TOKEN` from `~/.claude/channels/discord-ops/.env`) in `DISCORD_DASHBOARDS_CHANNEL_ID` (#dashboards, in `grafana/.env`) — minimem reads dev-status `:8077`, orbmem/heatmap read `ask-dash/.env` InfluxDB creds | `robogeosociety/discobots` |
+| **`ops/` #dashboards live panels** — `minimem.py` (host memory treemap), `orbmem.py` (per-container memory treemap), `claude_heatmap.py` (token heatmap). **Migrated 2026-07 from `observability-config/discord-{mini-mem,orbstack-mem,claude-heatmap}`** onto `discokit` (treemap + botmsg edit-in-place + a `daemon` watchdog that fixes the DNS-hang wedge). They post to the always-visible **#dashboards** channel (was the #ops "📊 Live Dashboards" thread; `thread_keepalive` is retired with the move — channels don't auto-archive). | OpsBot `DISCORD_BOT_TOKEN` + `DISCORD_DASHBOARDS_CHANNEL_ID`; InfluxDB creds (orbmem/heatmap); dev-status `:8077` (minimem) | `robogeosociety/discobots` |
 | `~/dev/obsidian-automations/automations/discord_notify.py`, `enrichment_discord.py` | `DISCORD_BOT_TOKEN` (falls back to `tommybot/.env`), `DISCORD_WEBHOOK_URL*` | `robogeosociety/obsidian-automations` |
 
 ## MCP servers (loaded by Claude discobot channels)
@@ -65,11 +66,13 @@ needs Apple Metal, no GPU in a Linux container.
   recipe runs over SSH/Tailscale (docker executes on the mini with OrbStack's bin on PATH) —
   no docker client on the Air, no change to the mini's shell profile, no setup step.
 - **Secrets stay on the mini host** and are injected at `docker run` by `ops/run.sh` (read
-  from `observability/{grafana,ask-dash}/.env`, `gh auth token`, transit's `service.yaml`).
-  Nothing secret enters an image or this repo.
+  from `observability/{grafana,ask-dash}/.env`, `~/.claude/channels/discord-ops/.env` for the
+  OpsBot token, `gh auth token`, transit's `service.yaml`). Nothing secret enters an image or
+  this repo.
 - **Bots:** `digest` (weekly Mon 08:15), `github` (the #dev heartbeat — org activity +
   human-task board every 30 min, dev check-in daily 08:00), `watcher` (daemon),
-  `transit` (every 5 min — OneBusAway GTFS-RT alerts for watched routes → transit channel).
+  `transit` (every 5 min — OneBusAway GTFS-RT alerts for watched routes → transit channel),
+  and the **#dashboards** live panels `minimem` / `orbmem` / `heatmap` (daemons, edit-in-place).
 
 ## Conventions
 

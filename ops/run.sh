@@ -20,6 +20,9 @@ export PATH="$HOME/.orbstack/bin:$HOME/.local/bin:/opt/homebrew/bin:$PATH"
 GRAFANA_ENV="$HOME/dev/observability/grafana/.env"
 ASKDASH_ENV="$HOME/dev/observability/ask-dash/.env"
 TRANSIT_SVC="$HOME/dev/transit_tracker/.local/service.yaml"
+# OpsBot's bot token — the #dashboards live panels (minimem/orbmem/heatmap) edit
+# their messages AS OpsBot, so they read its token from the OpsBot channel .env.
+OPSCHAN_ENV="$HOME/.claude/channels/discord-ops/.env"
 TZ_VAL="America/Los_Angeles"
 HOSTGW="host.docker.internal"   # how a container reaches the mini's localhost
 
@@ -292,14 +295,82 @@ start_embed() {
   echo "started discobot-embed (daemon; graphs tommybot's embeddings sync into one #ops message; state in volume discobot-embed-state)"
 }
 
+# ── #dashboards live panels (migrated from observability-config) ──────────────
+# The three edit-in-place dashboards that used to live in the #ops "Live Dashboards"
+# thread, now posting to the always-visible #dashboards channel. All three edit
+# their message AS OpsBot (token from the OpsBot channel .env) and take the channel
+# id from DISCORD_DASHBOARDS_CHANNEL_ID in grafana/.env (a channel id is not a
+# secret). Each on the discokit watchdog loop, so a DNS/network hang self-heals
+# instead of silently wedging (the 3-day freeze that motivated the move).
+
+# _dash_prereqs <NAME> — echo "<tok>\t<channel>" or return 1 with a message.
+_dash_prereqs() {
+  local name="$1" tok channel
+  tok="$(dotget "$OPSCHAN_ENV" DISCORD_BOT_TOKEN)"
+  channel="$(dotget "$GRAFANA_ENV" DISCORD_DASHBOARDS_CHANNEL_ID)"
+  [ -n "$tok" ]     || { echo "$name: DISCORD_BOT_TOKEN missing in $OPSCHAN_ENV (OpsBot)" >&2; return 1; }
+  [ -n "$channel" ] || { echo "$name: DISCORD_DASHBOARDS_CHANNEL_ID missing in grafana/.env — create #dashboards and record its id first" >&2; return 1; }
+  printf '%s\t%s' "$tok" "$channel"
+}
+
+start_minimem() {
+  local pre tok channel
+  pre="$(_dash_prereqs minimem)" || return 1
+  tok="${pre%%$'\t'*}"; channel="${pre##*$'\t'}"
+  docker rm -f discobot-minimem >/dev/null 2>&1 || true
+  docker run -d --name discobot-minimem "${common_run[@]}" \
+    -e "DISCORD_BOT_TOKEN=$tok" -e "DISCORD_CHANNEL_ID=$channel" \
+    -e "PROCESSES_URL=http://$HOSTGW:8077/processes.json" \
+    -v discobot-minimem-state:/state \
+    discobot-minimem:latest >/dev/null
+  echo "started discobot-minimem (daemon; edits one #dashboards message in place; state in volume discobot-minimem-state)"
+}
+
+start_orbmem() {
+  local pre tok channel url token org
+  pre="$(_dash_prereqs orbmem)" || return 1
+  tok="${pre%%$'\t'*}"; channel="${pre##*$'\t'}"
+  url="$(dotget "$ASKDASH_ENV" INFLUX_URL)"; url="${url:-http://localhost:8086}"
+  url="$(printf '%s' "$url" | hostify)"
+  token="$(dotget "$ASKDASH_ENV" INFLUX_READ_TOKEN)"
+  org="$(dotget "$ASKDASH_ENV" INFLUX_ORG)"; org="${org:-home}"
+  [ -n "$token" ] || { echo "orbmem: INFLUX_READ_TOKEN missing in ask-dash/.env" >&2; return 1; }
+  docker rm -f discobot-orbmem >/dev/null 2>&1 || true
+  docker run -d --name discobot-orbmem "${common_run[@]}" \
+    -e "DISCORD_BOT_TOKEN=$tok" -e "DISCORD_CHANNEL_ID=$channel" \
+    -e "INFLUXDB_URL=$url" -e "INFLUXDB_TOKEN=$token" -e "INFLUXDB_ORG=$org" \
+    -v discobot-orbmem-state:/state \
+    discobot-orbmem:latest >/dev/null
+  echo "started discobot-orbmem (daemon; edits one #dashboards message in place; state in volume discobot-orbmem-state)"
+}
+
+start_heatmap() {
+  local pre tok channel url token org
+  pre="$(_dash_prereqs heatmap)" || return 1
+  tok="${pre%%$'\t'*}"; channel="${pre##*$'\t'}"
+  url="$(dotget "$ASKDASH_ENV" INFLUX_URL)"; url="${url:-http://localhost:8086}"
+  url="$(printf '%s' "$url" | hostify)"
+  token="$(dotget "$ASKDASH_ENV" INFLUX_READ_TOKEN)"
+  org="$(dotget "$ASKDASH_ENV" INFLUX_ORG)"; org="${org:-home}"
+  [ -n "$token" ] || { echo "heatmap: INFLUX_READ_TOKEN missing in ask-dash/.env" >&2; return 1; }
+  docker rm -f discobot-heatmap >/dev/null 2>&1 || true
+  docker run -d --name discobot-heatmap "${common_run[@]}" \
+    -e "DISCORD_BOT_TOKEN=$tok" -e "DISCORD_CHANNEL_ID=$channel" \
+    -e "INFLUXDB_URL=$url" -e "INFLUXDB_TOKEN=$token" -e "INFLUXDB_ORG=$org" \
+    -v discobot-heatmap-state:/state \
+    discobot-heatmap:latest >/dev/null
+  echo "started discobot-heatmap (daemon; edits one #dashboards message in place; state in volume discobot-heatmap-state)"
+}
+
 bots=("$@")
 # Default set: `live` replaces the three standalone dashboard daemons
 # (dashboard/loop/embed), and `transit-panel` (one edited #transit message)
 # replaces `transit` (the per-alert firehose). All replaced daemons stay
 # start-able by name for rollback. The message bus (discobot-valkey) is NOT here —
 # it's declarative IaC in dev/infra/valkey (Terraform); `just up` drives the bots,
-# `terraform apply` in that root manages the broker.
-[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher opswatcher transit-panel skills live)
+# `terraform apply` in that root manages the broker. minimem/orbmem/heatmap are the
+# #dashboards live panels (need DISCORD_DASHBOARDS_CHANNEL_ID in grafana/.env).
+[ ${#bots[@]} -eq 0 ] && bots=(digest github watcher opswatcher transit-panel skills live minimem orbmem heatmap)
 for b in "${bots[@]}"; do
   case "$b" in
     digest)    start_digest ;;
@@ -310,9 +381,12 @@ for b in "${bots[@]}"; do
     transit-panel) start_transit_panel ;;
     skills)    start_skills ;;
     live)      start_live ;;
+    minimem)   start_minimem ;;
+    orbmem)    start_orbmem ;;
+    heatmap)   start_heatmap ;;
     dashboard) start_dashboard ;;
     loop)      start_loop ;;
     embed)     start_embed ;;
-    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|opswatcher|transit|transit-panel|skills|live|dashboard|loop|embed)" >&2; exit 2 ;;
+    *) echo "run.sh: unknown bot '$b' (digest|github|watcher|opswatcher|transit|transit-panel|skills|live|minimem|orbmem|heatmap|dashboard|loop|embed)" >&2; exit 2 ;;
   esac
 done

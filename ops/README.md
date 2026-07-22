@@ -14,9 +14,26 @@ Migrated here from the old unversioned `/Volumes/dev/discord-ops` (raw_exec Noma
 | **transit** | `discobot-transit` | every 5 min | OneBusAway GTFS-RT alerts, Discord | transit `service.yaml` OBA key + `DISCORD_WEBHOOK_TRANSIT` |
 | **skills** | `discobot-skills` | new-skill check every 3 h + spotlight daily 09:30 PT | host `~/.claude/{skills,plugins}` (ro mounts), Discord | `grafana/.env` `DISCORD_WEBHOOK_SKILLS` (→ general webhook fallback) |
 | **live** | `discobot-live` | daemon (one asyncio loop; 5 s / 30 s / 60 s / 5 min jobs) | dev-status `:8077`, InfluxDB `:8086`, host `~/Library/Caches/tommybot` (ro mount, DB + live.json), **the bus `:6379`**, Discord | `ask-dash/.env` InfluxDB read creds + `grafana/.env` `DISCORD_WEBHOOK_OPS` (→ general webhook fallback) |
+| **minimem** | `discobot-minimem` | daemon (60 s, edit-in-place) | dev-status `:8077` (`processes.json`), Discord | OpsBot `DISCORD_BOT_TOKEN` (`~/.claude/channels/discord-ops/.env`) + `grafana/.env` `DISCORD_DASHBOARDS_CHANNEL_ID` |
+| **orbmem** | `discobot-orbmem` | daemon (60 s, edit-in-place) | InfluxDB `:8086` (`docker_container_mem`), Discord | OpsBot token + `DISCORD_DASHBOARDS_CHANNEL_ID` + `ask-dash/.env` InfluxDB read creds |
+| **heatmap** | `discobot-heatmap` | daemon (60 s, edit-in-place) | InfluxDB `:8086` (`claude_code` bucket), Discord | OpsBot token + `DISCORD_DASHBOARDS_CHANNEL_ID` + `ask-dash/.env` InfluxDB read creds |
 
 *(dashboard / loop / embed — the three standalone daemons `live` replaced — stay
 buildable + start-able by name for rollback, out of the default set.)*
+
+**minimem / orbmem / heatmap** are the **#dashboards live panels** — three edit-in-place
+messages (a Mac-mini memory treemap, an OrbStack per-container memory treemap, and a
+Claude token-usage heatmap). They were migrated from
+`observability-config/discord-{mini-mem,orbstack-mem,claude-heatmap}` onto `discokit`:
+the treemap is `discokit.treemap`, the bot-token edit-in-place transport is
+`discokit.botmsg`, and the tick loop is `discokit.daemon.serve`. That loop adds a
+**per-tick SIGALRM watchdog** — the fix for a 3-day silent wedge in the standalone bots,
+where a hung DNS lookup (which socket timeouts don't bound) froze the loop below its
+`except` while the process stayed alive. They edit their message **as OpsBot** (so OpsBot
+owns it) and post to the always-visible **#dashboards** channel (formerly the #ops "📊 Live
+Dashboards" thread — `thread_keepalive` retired with the move, since a channel can't
+auto-archive). `just dry minimem` / `orbmem` / `heatmap` renders the live snapshot without
+posting.
 
 > **The message bus (`discobot-valkey`) is not a discobot** — it's shared fleet
 > infrastructure (the discobots inner loop *and* the obsidian-automations supervisor

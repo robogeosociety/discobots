@@ -45,7 +45,7 @@ up *bots:
 down *bots:
     #!/usr/bin/env bash
     set -euo pipefail
-    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher opswatcher transit transit-panel skills live dashboard loop embed"
+    names="{{bots}}"; [ -z "$names" ] && names="digest github watcher opswatcher transit transit-panel skills live minimem orbmem heatmap dashboard loop embed"
     cmds=""; for b in $names; do cmds="$cmds docker rm -f discobot-$b;"; done
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; $cmds" || true
 
@@ -83,7 +83,7 @@ run-now bot:
       digest) s=digest.py;; github) s=github_discord.py;; transit) s=transit_discord.py;;
       skills) s=skills_discord.py;;
       checkin) s=dev_checkin.py; c=discobot-github;;
-      watcher|live|dashboard|loop|embed) echo "{{bot}} is a daemon — use \`just logs {{bot}}\` (or \`just dry {{bot}}\` to preview)" >&2; exit 2;;
+      watcher|live|minimem|orbmem|heatmap|dashboard|loop|embed) echo "{{bot}} is a daemon — use \`just logs {{bot}}\` (or \`just dry {{bot}}\` to preview)" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec $c python /app/$s"
 
@@ -131,6 +131,7 @@ dry bot:
       loop) s=loop_dashboard.py; f="--dry --demo";;
       embed) s=embed_dashboard.py; f="--dry --demo";;
       chat) s=chat_dashboard.py; f="--dry --demo";;
+      minimem) s=minimem.py; f=--dry;; orbmem) s=orbmem.py; f=--dry;; heatmap) s=claude_heatmap.py; f=--dry;;
       watcher) echo "watcher is a daemon — use \`just logs watcher\`" >&2; exit 2;;
       *) echo "unknown bot {{bot}}" >&2; exit 2;; esac
     ssh {{mini_host}} "export PATH=\$HOME/.orbstack/bin:\$PATH; docker exec $c python /app/$s $f"
