@@ -30,6 +30,30 @@ gh api -X POST /repos/robogeosociety/<repo>/environments/production/deployment_p
 then give the deploy job `environment: production`. Public repos only (env protection
 is paywalled on private repos — their gating rides the mini runner instead).
 
+## /notify — operator-attention lane
+
+`POST /notify` posts a compact embed to `#dev` as the bot. Directive (2026-07-22):
+anything pending Tommy — credential ceremonies, approvals outside the gate, blocked
+chains — must arrive as a discobot post in `#dev`, not sit silently in an agent
+session.
+
+- Body: `{"title": "...", "body": "...", "level": "info|warn|error"}` (`level`
+  optional, default `info`).
+- Auth: HMAC-SHA256 of the raw body with **`NOTIFY_SECRET`** (dedicated secret,
+  not `DG_REQUEST_SECRET`), sent as `x-request-signature: sha256=<hex>`.
+- Key locations: repo secret `NOTIFY_SECRET` (synced to the Worker by CD); operator
+  copy on the mini at `~/.config/deploy-gate/notify-key` (0600) so local agent
+  sessions can sign requests.
+
+Curl one-liner for agents (on the mini, or anywhere with a key copy):
+
+```sh
+BODY='{"title":"⏳ blocked: CF token ceremony","body":"tfvend apply needs a fresh dash login — session `xyz` parked","level":"warn"}' \
+&& curl -sf https://deploy-gate.tommy-b-doerr.workers.dev/notify \
+  -H "x-request-signature: sha256=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$(cat ~/.config/deploy-gate/notify-key)" | awk '{print $NF}')" \
+  -H 'content-type: application/json' -d "$BODY"
+```
+
 ## Deploy
 
 CD only: `.github/workflows/deploy-gate.yml` on merge to main (wrangler deploy,
