@@ -7,5 +7,19 @@
       "Bash(git fetch *)",
       "Bash(just --list)"
     ]
+  },
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/hooks/claude-session-summary/session_summary.py cloud-hook",
+            "timeout": 300,
+            "async": true
+          }
+        ]
+      }
+    ]
   }
 }
