@@ -76,6 +76,30 @@ repo = "discobots"
 status = "operational"
 
 [[bots]]
+name = "minimem"
+channel = "#dashboards"
+cadence = "daemon · 60s, edit-in-place"
+what = "live Mac-mini memory treemap (colored-square emoji) — sibling of the Grafana mac-system treemap"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
+name = "orbmem"
+channel = "#dashboards"
+cadence = "daemon · 60s, edit-in-place"
+what = "live OrbStack per-container memory treemap (InfluxDB docker_container_mem)"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
+name = "heatmap"
+channel = "#dashboards"
+cadence = "daemon · 60s, edit-in-place"
+what = "Claude token-usage heatmap (contrib-graph style) — output tokens by project × hour"
+repo = "discobots"
+status = "operational"
+
+[[bots]]
 name = "grafana-alerting"
 channel = "#alerts"
 cadence = "on firing / resolved"
