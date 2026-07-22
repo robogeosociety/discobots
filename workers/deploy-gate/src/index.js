@@ -1,12 +1,17 @@
 // deploy-gate — the org's deploy-approval gate (robogeosociety/discobots#55).
 //
-// Two inbound routes:
+// Inbound routes:
 //   POST /github        GitHub `deployment_protection_rule` webhook (HMAC-verified)
 //                       → posts an Approve/Reject card to #dev, or auto-approves
 //                       allowlisted self-dispatches (AUTO_APPROVE_ACTORS) with an FYI.
 //   POST /interactions  Discord interactions (Ed25519-verified): the card's buttons
 //                       and the /deploy approve|reject slash command
 //                       → answers GitHub's deployment callback.
+//   POST /notify        operator-attention lane (HMAC via NOTIFY_SECRET):
+//                       {title, body, level?} → compact embed in #dev. Anything
+//                       pending Tommy — credential ceremonies, approvals outside
+//                       the gate, blocked chains — lands here instead of sitting
+//                       silently in an agent session.
 //
 // GitHub auth is the rgs-deploy-gate GitHub App (JWT → installation token).
 
@@ -153,6 +158,26 @@ async function autoApprove(env, p) {
   const channel = await deployChannelId(env);
   await discord(env, "POST", `/channels/${channel}/messages`, {
     content: `🟢 auto-approved — ${repo} → ${p.environment} · self-dispatched by \`${creator}\` · <${runUrl}>`,
+  });
+}
+
+// ── /notify — operator-attention lane ────────────────────────────────────────
+
+const NOTIFY_LEVELS = {
+  info: { emoji: "📣", color: 0x5865f2 },
+  warn: { emoji: "⚠️", color: 0xe8a33d },
+  error: { emoji: "🚨", color: 0xcc4444 },
+};
+
+async function postNotify(env, req) {
+  const level = NOTIFY_LEVELS[req.level] || NOTIFY_LEVELS.info;
+  const channel = await deployChannelId(env);
+  await discord(env, "POST", `/channels/${channel}/messages`, {
+    embeds: [{
+      title: `${level.emoji} ${String(req.title).slice(0, 250)}`,
+      description: String(req.body).slice(0, 4000),
+      color: level.color,
+    }],
   });
 }
 
@@ -322,6 +347,26 @@ export default {
       const req = JSON.parse(bodyText);
       if (!req.repo || !req.run_id || !req.sha) return new Response("missing fields", { status: 400 });
       ctx.waitUntil(postDispatchCard(env, req));
+      return json({ ok: true });
+    }
+
+    if (url.pathname === "/notify") {
+      if (!env.NOTIFY_SECRET) return new Response("notify not configured", { status: 503 });
+      if (!(await verifyHmacHeader(request, "x-request-signature", env.NOTIFY_SECRET, bodyText))) return new Response("bad signature", { status: 401 });
+      let req;
+      try {
+        req = JSON.parse(bodyText);
+      } catch {
+        return new Response("bad json", { status: 400 });
+      }
+      if (!req.title || !req.body) return new Response("missing fields", { status: 400 });
+      // Awaited (not waitUntil): the caller is an agent that needs to know the
+      // ping actually landed in #dev before it parks the blocked work.
+      try {
+        await postNotify(env, req);
+      } catch (e) {
+        return json({ ok: false, error: e.message }, 502);
+      }
       return json({ ok: true });
     }
 
