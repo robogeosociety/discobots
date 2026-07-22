@@ -2,7 +2,8 @@
 //
 // Two inbound routes:
 //   POST /github        GitHub `deployment_protection_rule` webhook (HMAC-verified)
-//                       → posts an Approve/Reject card to #dev.
+//                       → posts an Approve/Reject card to #dev, or auto-approves
+//                       allowlisted self-dispatches (AUTO_APPROVE_ACTORS) with an FYI.
 //   POST /interactions  Discord interactions (Ed25519-verified): the card's buttons
 //                       and the /deploy approve|reject slash command
 //                       → answers GitHub's deployment callback.
@@ -132,6 +133,26 @@ async function postPendingCard(env, p) {
         { type: 2, style: 4, label: "Reject", custom_id: `dg|rejected|${repo}|${runId}|${p.environment}` },
       ],
     }],
+  });
+}
+
+// Self-dispatched deploys by an allowlisted actor skip the card: a workflow_dispatch
+// is already an expression of the dispatcher's intent, so demanding their own
+// approval tap adds nothing (see the 5-tap token-rotation resync of 2026-07-21).
+function isAutoApprovable(env, p) {
+  const actors = (env.AUTO_APPROVE_ACTORS || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return p.event === "workflow_dispatch" && actors.includes(p.deployment?.creator?.login);
+}
+
+async function autoApprove(env, p) {
+  const runId = p.deployment_callback_url.match(/\/runs\/(\d+)\//)[1];
+  const repo = p.repository.name;
+  const creator = p.deployment?.creator?.login;
+  await reviewDeployment(env, repo, runId, p.environment, "approved", `auto (self-dispatched by ${creator})`);
+  const runUrl = `${p.repository.html_url}/actions/runs/${runId}`;
+  const channel = await deployChannelId(env);
+  await discord(env, "POST", `/channels/${channel}/messages`, {
+    content: `🟢 auto-approved — ${repo} → ${p.environment} · self-dispatched by \`${creator}\` · <${runUrl}>`,
   });
 }
 
@@ -309,7 +330,13 @@ export default {
       const event = request.headers.get("x-github-event");
       if (event === "deployment_protection_rule") {
         const p = JSON.parse(bodyText);
-        if (p.action === "requested") ctx.waitUntil(postPendingCard(env, p));
+        if (p.action === "requested") {
+          // If auto-approval fails, fall back to the card — otherwise the run
+          // would hang pending with nothing posted anywhere.
+          ctx.waitUntil(isAutoApprovable(env, p)
+            ? autoApprove(env, p).catch(() => postPendingCard(env, p))
+            : postPendingCard(env, p));
+        }
       }
       return json({ ok: true });
     }
