@@ -29,3 +29,23 @@ Per machine:
 - Sweep window: sessions idle ≥45 min and ≤3 days old.
 - `python3 session_summary.py post <transcript.jsonl>` force-posts one
   session (testing).
+
+## Claude Code web sessions (`cloud-hook` mode)
+
+Web sessions (claude.ai/code) run in cloud sandboxes that never see the
+user-level pipeline, but they DO run this repo's committed
+`.claude/settings.json` — which registers
+`session_summary.py cloud-hook` as a SessionEnd hook. That mode:
+
+- **no-ops when `~/.claude/hooks/dev-summary.env` exists** (i.e. on the
+  Air/mini, where the user-level hook already handles the session) so
+  local sessions in this repo never double-post;
+- reads `DISCORD_WEBHOOK_DEV` from the cloud environment's configured
+  env vars (there is no secrets store yet — the value is visible to
+  anyone who can edit the environment);
+- tries `claude -p` and **falls back to a plain digest** (title, first
+  prompt, model, `claude-web` footer) if the CLI isn't in the sandbox.
+
+One-time setup per cloud environment (Tommy, in the claude.ai UI):
+set `DISCORD_WEBHOOK_DEV` in the environment's env vars and make sure
+network access allows `discord.com`.

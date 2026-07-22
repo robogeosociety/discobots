@@ -7,6 +7,13 @@ Runs in two modes:
                                     sessions and post each (the daily backstop for sessions
                                     that never fired SessionEnd)
   session_summary.py post <jsonl>   force-summarize one transcript (testing)
+  session_summary.py cloud-hook     SessionEnd entry point for the repo-committed hook used
+                                    by Claude Code web sessions. No-ops on machines that run
+                                    the installed user-level pipeline (dev-summary.env
+                                    present), so Air/mini never double-post; in the cloud
+                                    sandbox it reads DISCORD_WEBHOOK_DEV from the
+                                    environment config and falls back to a plain digest if
+                                    the claude CLI is absent.
 
 Config (env or ~/.claude/hooks/dev-summary.env):
   DISCORD_WEBHOOK_DEV   required — the #dev webhook
@@ -175,6 +182,21 @@ Transcript (condensed):
     return out[:DISCORD_LIMIT]
 
 
+def plain_digest(meta, text):
+    first_user = next(
+        (p[6:] for p in text.split("\n") if p.startswith("USER: ")), ""
+    )
+    title = meta.get("title") or first_user[:80] or "Claude session"
+    lines = [f"\U0001f4dd **{title}**"]
+    if first_user and first_user[:80] != title:
+        lines.append(f"Asked: {first_user[:300]}")
+    lines.append(
+        f"{meta['user_n']} prompt(s), model {meta.get('model') or '?'} — "
+        "no summarizer available in this sandbox, plain digest only."
+    )
+    return "\n".join(lines)[:DISCORD_LIMIT]
+
+
 def duration_str(meta):
     try:
         a = datetime.fromisoformat(meta["first_ts"].replace("Z", "+00:00"))
@@ -189,7 +211,7 @@ def post(summary, meta):
     url = os.environ.get("DISCORD_WEBHOOK_DEV")
     if not url:
         raise RuntimeError("DISCORD_WEBHOOK_DEV not set")
-    host = socket.gethostname().split(".")[0]
+    host = os.environ.get("_DEV_SUMMARY_HOST") or socket.gethostname().split(".")[0]
     cwd = re.sub(r"^/(Users|Volumes)/[^/]+/", "~/", meta.get("cwd") or "?")
     footer = f"\n-# claude session · {host} · {cwd} · {duration_str(meta)}"
     body = json.dumps(
@@ -232,6 +254,28 @@ def cmd_hook():
     handle(Path(tp), sid, load_state())
 
 
+def cmd_cloud_hook():
+    if ENV_FILE.exists():
+        return  # this machine runs the installed user-level pipeline
+    if os.environ.get("DEV_SUMMARY_SKIP") or not os.environ.get("DISCORD_WEBHOOK_DEV"):
+        return
+    data = json.load(sys.stdin)
+    tp = data.get("transcript_path")
+    sid = data.get("session_id")
+    if not tp or not sid or not Path(tp).exists():
+        return
+    got = condense(Path(tp))
+    if not got:
+        return
+    meta, text = got
+    os.environ["_DEV_SUMMARY_HOST"] = "claude-web"
+    try:
+        summary = summarize(meta, text)
+    except (OSError, RuntimeError, subprocess.SubprocessError):
+        summary = plain_digest(meta, text)
+    post(summary, meta)
+
+
 def cmd_sweep():
     posted = load_state()
     now = time.time()
@@ -255,6 +299,8 @@ def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "hook"
     if mode == "hook":
         cmd_hook()
+    elif mode == "cloud-hook":
+        cmd_cloud_hook()
     elif mode == "sweep":
         cmd_sweep()
     elif mode == "post":
@@ -277,4 +323,4 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         print(f"dev-summary error: {e}", file=sys.stderr)
-        sys.exit(0 if len(sys.argv) > 1 and sys.argv[1] == "hook" else 1)
+        sys.exit(0 if len(sys.argv) > 1 and sys.argv[1] in ("hook", "cloud-hook") else 1)
