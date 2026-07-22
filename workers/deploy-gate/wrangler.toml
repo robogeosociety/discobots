@@ -8,6 +8,9 @@ GH_ORG = "robogeosociety"
 DEPLOY_CHANNEL = "dev"
 # Discord user ids allowed to approve/reject (comma-separated).
 APPROVER_IDS = "1382748563355734127"
+# GitHub logins whose workflow_dispatch deploys are auto-approved (comma-separated).
+# Self-dispatch is already intent; merge/push-triggered deploys still get the card.
+AUTO_APPROVE_ACTORS = "tommyroar"
 GH_APP_ID = "4327530"
 DISCORD_APPLICATION_ID = "1527798215145951405"
 DISCORD_PUBLIC_KEY = "04c4ec2a4052cf7fdb1091d8f5e915078dbb86db9e6c58880e68284044ee53a9"
