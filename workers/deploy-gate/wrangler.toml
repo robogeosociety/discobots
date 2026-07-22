@@ -3,6 +3,10 @@ main = "src/index.js"
 compatibility_date = "2026-07-01"
 workers_dev = true
 
+# Dead-letter tick: validate the bot token, redeliver failed webhook deliveries.
+[triggers]
+crons = ["*/10 * * * *"]
+
 [vars]
 GH_ORG = "robogeosociety"
 DEPLOY_CHANNEL = "dev"
@@ -16,3 +20,7 @@ DISCORD_PUBLIC_KEY = "04c4ec2a4052cf7fdb1091d8f5e915078dbb86db9e6c58880e68284044
 #   DISCORD_BOT_TOKEN         — posts to #dev + registers commands
 #   GH_APP_PRIVATE_KEY_PKCS8  — rgs-deploy-gate app key (PKCS#8) for JWT auth
 #   GH_WEBHOOK_SECRET         — HMAC for the GitHub app webhook
+#   DG_REQUEST_SECRET         — HMAC for the /request dispatch lane
+#   DISCORD_FALLBACK_WEBHOOK  — plain #dev channel webhook URL for dead-letter
+#                               alerts (works without the bot token; optional —
+#                               alerts are skipped when unset)

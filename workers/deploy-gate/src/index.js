@@ -8,6 +8,12 @@
 //                       → answers GitHub's deployment callback.
 //
 // GitHub auth is the rgs-deploy-gate GitHub App (JWT → installation token).
+//
+// Dead-letter path (the 2026-07-21 token-rotation incident: cards silently failed,
+// runs sat pending 40+ min): card-posting failures answer 5xx so the delivery is
+// marked failed, a cron tick redelivers failed deliveries via the App API (GitHub
+// does NOT redeliver on its own), and every failure pings DISCORD_FALLBACK_WEBHOOK —
+// a plain channel webhook that works even when the bot token doesn't.
 
 const enc = new TextEncoder();
 
@@ -133,6 +139,65 @@ async function postPendingCard(env, p) {
       ],
     }],
   });
+}
+
+// ── dead-letter path ─────────────────────────────────────────────────────────
+
+// Best-effort operator ping that does not ride the bot token. No-op when the
+// secret is unset; never throws (it must not mask the failure it reports).
+async function fallbackAlert(env, content) {
+  if (!env.DISCORD_FALLBACK_WEBHOOK) return;
+  try {
+    await fetch(env.DISCORD_FALLBACK_WEBHOOK, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ content: `🚨 **deploy-gate** — ${content}`, allowed_mentions: { parse: [] } }),
+    });
+  } catch { /* best effort */ }
+}
+
+async function botTokenStatus(env) {
+  const res = await fetch("https://discord.com/api/v10/users/@me", {
+    headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
+  });
+  return { ok: res.ok, status: res.status };
+}
+
+// Redeliver failed deployment_protection_rule deliveries via the App API.
+// A redelivery shows up as a new delivery under the same guid, so keeping only
+// the newest delivery per guid makes this converge: fixed → newest is OK, stop;
+// still broken → newest failed again, retry next tick. The window caps zombies.
+const REDELIVER_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+async function redeliverFailed(env) {
+  const jwt = await appJwt(env);
+  const res = await gh(env, jwt, "GET", "/app/hook/deliveries?per_page=100");
+  if (!res.ok) throw new Error(`deliveries list ${res.status}`);
+  const latest = new Map(); // guid → newest delivery (the list is newest-first)
+  for (const d of await res.json()) if (!latest.has(d.guid)) latest.set(d.guid, d);
+  const cutoff = Date.now() - REDELIVER_WINDOW_MS;
+  const failed = [...latest.values()].filter((d) =>
+    d.event === "deployment_protection_rule" &&
+    !(d.status_code >= 200 && d.status_code < 300) &&
+    Date.parse(d.delivered_at) > cutoff);
+  for (const d of failed) {
+    const r = await gh(env, jwt, "POST", `/app/hook/deliveries/${d.id}/attempts`);
+    if (!r.ok) throw new Error(`redeliver ${d.id} ${r.status}`);
+  }
+  return failed.length;
+}
+
+async function deadLetterTick(env) {
+  const tok = await botTokenStatus(env);
+  if (!tok.ok) {
+    // Redelivering now would just fail again — nag until the token is rotated in.
+    await fallbackAlert(env,
+      `bot token is invalid (Discord /users/@me → HTTP ${tok.status}); cards cannot post. ` +
+      `Fix DISCORD_BOT_TOKEN — failed deliveries redeliver on the next tick.`);
+    return;
+  }
+  const n = await redeliverFailed(env);
+  if (n > 0) await fallbackAlert(env, `redelivered ${n} failed webhook deliver${n === 1 ? "y" : "ies"}.`);
 }
 
 // ── request verification ─────────────────────────────────────────────────────
@@ -287,7 +352,13 @@ async function handleInteraction(env, interaction) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (request.method === "GET" && url.pathname === "/health") return json({ ok: true });
+    if (request.method === "GET" && url.pathname === "/health") {
+      const tok = await botTokenStatus(env);
+      return json({
+        ok: tok.ok,
+        bot_token: tok.ok ? "valid" : `invalid (Discord /users/@me → HTTP ${tok.status})`,
+      }, tok.ok ? 200 : 503);
+    }
     if (request.method !== "POST") return new Response("deploy-gate", { status: 200 });
     const bodyText = await request.text();
 
@@ -300,7 +371,16 @@ export default {
       if (!(await verifyHmacHeader(request, "x-request-signature", env.DG_REQUEST_SECRET, bodyText))) return new Response("bad signature", { status: 401 });
       const req = JSON.parse(bodyText);
       if (!req.repo || !req.run_id || !req.sha) return new Response("missing fields", { status: 400 });
-      ctx.waitUntil(postDispatchCard(env, req));
+      try {
+        await postDispatchCard(env, req);
+      } catch (e) {
+        // The caller's `curl -sf` step goes red — re-run the job to retry.
+        ctx.waitUntil(fallbackAlert(env,
+          `dispatch card failed for ${req.repo} run ${req.run_id} ` +
+          `(https://github.com/${env.GH_ORG}/${req.repo}/actions/runs/${req.run_id}): ${e.message}. ` +
+          `Re-run the request-approval job once fixed.`));
+        return json({ ok: false, error: e.message }, 502);
+      }
       return json({ ok: true });
     }
 
@@ -309,11 +389,27 @@ export default {
       const event = request.headers.get("x-github-event");
       if (event === "deployment_protection_rule") {
         const p = JSON.parse(bodyText);
-        if (p.action === "requested") ctx.waitUntil(postPendingCard(env, p));
+        if (p.action === "requested") {
+          try {
+            await postPendingCard(env, p);
+          } catch (e) {
+            const runId = p.deployment_callback_url?.match(/\/runs\/(\d+)\//)?.[1] || "?";
+            ctx.waitUntil(fallbackAlert(env,
+              `pending card failed for ${p.repository?.name} run ${runId} ` +
+              `(${p.repository?.html_url}/actions/runs/${runId}): ${e.message}. ` +
+              `Delivery marked failed; the cron tick redelivers once healthy.`));
+            return json({ ok: false, error: e.message }, 500);
+          }
+        }
       }
       return json({ ok: true });
     }
 
     return new Response("not found", { status: 404 });
+  },
+
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(deadLetterTick(env).catch((e) =>
+      fallbackAlert(env, `dead-letter tick failed: ${e.message}`)));
   },
 };
