@@ -12,7 +12,9 @@ Worker, dispatched on `controller.cron`.
 - PRs opened / merged and issues opened / closed across recently-pushed org repos
 - releases published
 - red CI on default branches
-- human-task board changes (issues labeled `human-task` opened / closed / commented)
+- human-task board changes (issues labeled `human-task` opened / closed / commented);
+  a newly opened task **@-mentions tommyroar** so nothing waits silently, and the
+  daily check-in repeats the ping while any tasks remain open
 
 ## The check-in (daily 15:03 UTC ≈ 08:00 PDT; lands 07:03 PT under winter PST — Workers crons are UTC-only)
 

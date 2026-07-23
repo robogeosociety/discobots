@@ -27,6 +27,7 @@
 // KV state doc; `controller.cron` picks the beat.
 
 const HUMAN_TASK_LABEL = "human-task";
+const OPERATOR_ID = "1382748563355734127"; // @tommyroar — pinged when a human task waits
 const CHECKIN_CRON = "3 15 * * *"; // daily check-in; anything else = the 30-min heartbeat
 // (see wrangler.toml for the PT/DST caveat and the :03 anti-collision offset)
 const CI_HEALTH_DAYS = 7; // check-in CI chips cover repos pushed this recently
@@ -142,11 +143,15 @@ async function heartbeatChannelId(env) {
   throw new Error(`channel #${env.HEARTBEAT_CHANNEL} not found in any guild the bot is in`);
 }
 
-async function postEmbeds(env, embeds) {
+async function postEmbeds(env, embeds, content) {
   const channel = await heartbeatChannelId(env);
   for (let i = 0; i < embeds.length; i += EMBEDS_PER_MESSAGE) {
     await discord(env, "POST", `/channels/${channel}/messages`, {
       embeds: embeds.slice(i, i + EMBEDS_PER_MESSAGE),
+      // the mention rides the first message only — one ping per post, not per chunk
+      ...(content && i === 0
+        ? { content, allowed_mentions: { users: [OPERATOR_ID] } }
+        : {}),
     });
   }
 }
@@ -458,11 +463,17 @@ async function checkin(env) {
   const day = new Date(now).toLocaleDateString("en-US", {
     weekday: "short", month: "short", day: "numeric", timeZone: "America/Los_Angeles",
   });
-  await postEmbeds(env, [{
-    title: `☕ Dev check-in — ${day}`,
-    description: sections.join("\n\n"),
-    color: COLOR_ISSUE, // INFO blue, the container's check-in colour
-  }]);
+  await postEmbeds(
+    env,
+    [{
+      title: `☕ Dev check-in — ${day}`,
+      description: sections.join("\n\n"),
+      color: COLOR_ISSUE, // INFO blue, the container's check-in colour
+    }],
+    tasks.length
+      ? `<@${OPERATOR_ID}> ${tasks.length} human task${tasks.length === 1 ? "" : "s"} still waiting`
+      : undefined,
+  );
 
   // After the post, like the container: a failed post keeps the window open.
   state.doc.checkin_last_run = new Date(now).toISOString();
@@ -490,7 +501,12 @@ async function heartbeat(env) {
 
   if (embeds.length) {
     console.log(`posting ${embeds.length} embed(s) to #${env.HEARTBEAT_CHANNEL}`);
-    await postEmbeds(env, embeds);
+    const opened = embeds.filter((e) => e.title?.startsWith("🧭")).length;
+    await postEmbeds(
+      env,
+      embeds,
+      opened ? `<@${OPERATOR_ID}> ${opened === 1 ? "a human task needs" : `${opened} human tasks need`} you` : undefined,
+    );
   } else {
     console.log("no new relevant events");
   }
