@@ -9,7 +9,10 @@ GitHub *custom deployment protection rules* into Discord Approve/Reject cards in
 1. A workflow job with `environment: production` starts in a repo whose environment
    lists the **rgs-deploy-gate** GitHub App as a deployment protection rule.
 2. GitHub sends `deployment_protection_rule` to `POST /github` (HMAC-verified).
-3. The Worker posts a card to `#dev` with Approve/Reject buttons.
+3. The Worker posts a card to `#dev` with Approve/Reject buttons, @-mentioning the
+   operator (`allowed_mentions` scoped to that one user) so a pending deploy actually
+   notifies instead of waiting silently. Only pending cards ping — approved,
+   auto-approved, and `/notify` posts don't.
 4. A button click (or `/deploy approve repo:<r> run_id:<id>`) — approvers only —
    answers GitHub's callback; the job proceeds or stays withheld.
 
