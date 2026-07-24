@@ -17,6 +17,10 @@
 
 const enc = new TextEncoder();
 
+// @tommyroar — pinged on pending-approval cards only (approved/auto-approved/notify
+// posts stay mention-free); same pattern as the github-heartbeat worker (#71).
+const OPERATOR_ID = "1382748563355734127";
+
 // ── generic helpers ──────────────────────────────────────────────────────────
 
 function hexToBytes(hex) {
@@ -126,6 +130,8 @@ async function postPendingCard(env, p) {
   const creator = p.deployment?.creator?.login || "?";
   const channel = await deployChannelId(env);
   await discord(env, "POST", `/channels/${channel}/messages`, {
+    content: `<@${OPERATOR_ID}>`,
+    allowed_mentions: { users: [OPERATOR_ID] },
     embeds: [{
       title: `🚦 deploy pending — ${repo} → ${p.environment}`,
       description: `[workflow run ${runId}](${runUrl})\nref \`${ref}\` · by \`${creator}\``,
@@ -224,6 +230,8 @@ async function postDispatchCard(env, req) {
   const runUrl = `https://github.com/${env.GH_ORG}/${repo}/actions/runs/${runId}`;
   const channel = await deployChannelId(env);
   await discord(env, "POST", `/channels/${channel}/messages`, {
+    content: `<@${OPERATOR_ID}>`,
+    allowed_mentions: { users: [OPERATOR_ID] },
     embeds: [{
       title: `🚦 deploy pending — ${repo} → mini`,
       description: `[workflow run ${runId}](${runUrl})\ntag \`${tag}\` · sha \`${(sha || "").slice(0, 12)}\``,
